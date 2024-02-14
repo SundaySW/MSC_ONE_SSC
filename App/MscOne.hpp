@@ -3,29 +3,32 @@
 #include "stm32g4xx_hal.h"
 #include <cstring>
 #include <functional>
+#include <array>
 
-#include "protos_msg.h"
-#include "protos_device.h"
-#include "base_param.h"
-#include "base_device.hpp"
+#include "protos_core/protos_msg.h"
+#include "protos_core/protos_device.h"
+#include "protos_core/base_param.h"
 
-#include "i2c.hpp"
-#include "adc.hpp"
-#include "tim_ICmode.hpp"
-#include "dac.hpp"
-#include "eeprom.hpp"
-#include "eeprom_24aa02uid.hpp"
+#include "protos_can_device/base_device.hpp"
 
-#include "onewire_device_pool.h"
-#include "onewire_ds2482.h"
-#include "onewire_task_provider.h"
+#include "sa_stm32_g4/i2c.hpp"
+#include "sa_stm32_g4/adc.hpp"
+#include "sa_stm32_g4/tim_ICmode.hpp"
+#include "sa_stm32_g4/dac.hpp"
+#include "sa_stm32_g4/eeprom.hpp"
+#include "sa_stm32_g4/eeprom_24aa02uid.hpp"
+
+#include "1Wire/onewire_device_pool.h"
+#include "1Wire/onewire_ds2482.h"
+#include "1Wire/onewire_task_provider.h"
+#include "OneWire/OneWire.hpp"
 
 #define EEPROM_I2C_ADDR 0x50
 #define DS2482_I2C_ADDR 0x18
 
 using namespace Protos;
 
-class MscOne : public BaseDevice, public OneWire::TaskProvider
+class MscOne : public BaseDevice
 {
 public:
     using ADCc3 = Adc<3>;
@@ -44,8 +47,10 @@ public:
                   I2C_HandleTypeDef *i2c2,
                   DAC_HandleTypeDef *dac1,
                   TIM_HandleTypeDef* timHall0,
-                  TIM_HandleTypeDef* timHall1)
+                  TIM_HandleTypeDef* timHall1,
+                  TIM_HandleTypeDef* delay_tim)
     {
+        oneWirePort1.SetTim(delay_tim);
         I2CMaster = I2C(i2c2);
         AdcA1 = std::move(ADCc3(adc1));
         AdcA2 = std::move(ADCc2(adc2));
@@ -98,15 +103,13 @@ public:
 	{
 		readUID();
         loadCalibParamsDataFromEEPROM();
-        ds2482.Start();
 		AdcA1.Start();
         AdcA2.Start();
 		TimIC0.Start();
         TimIC1.Start();
 		Valve0Ctrl.Start();
 		Valve1Ctrl.Start();
-        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
-        OWDevices.OnSearch(Address, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
+//        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
     }
 
     static void saveCalibParamToEEPROM(char ID, float* data){
@@ -152,8 +155,8 @@ public:
         msg2.Dlc = msg.Dlc;
         for (int i = 0; i < msg.Dlc; i++)
             msg2.Data[i] = msg.Data[i];
-        if (msg2.Dst == Address)
-            OWDevices.ProcessMessage(msg2);
+//        if (msg2.Dst == Address)
+//            OWDevices.ProcessMessage(msg2);
 
         switch (msg.GetMSGType()) {
             case MSGTYPE_PARAM_SET:
@@ -169,22 +172,26 @@ public:
         }
     };
 
-	bool ProcessTaskResult(const OneWire::Task::Result& task) override
-	{
-		return OWDevices.ProcessTaskResult(task);
-	}
+    void PlacingCoroTask(){
+        oneWirePort1.WScratchpad(std::array<char, 8> {0,1,2,3,4,5,6,7});
+    }
 
 	void OnPoll() override {
-        OWDevices.Poll();
+        oneWirePort1.PollPort([&](OneW_Coro::CoroTask task){ ProcessOneWTaskResult(std::move(task)); });
         for (auto* param : Params)
             if(param != nullptr) param->Poll();
 	};
 
-	void OnTimer(short ms) override{
+    void ProcessOneWTaskResult(OneW_Coro::CoroTask task){
+        if(task.type == OneW_Coro::read_scratchpad){
+            auto data = task.GetStoredArg<std::array<char,8>>();
+            SendProtosMsg(0xFF, MSGTYPE_CMDMISC, data);
+        }
+    }
+
+	void OnTimer(int ms) override{
         for (auto param : Params)
             if(param != nullptr) param->OnTimer(ms);
-        OWDevices.OnTimer(ms);
-        ds2482.OnDelayTimer();
 	};
 
     I2C& getI2CMaster(){
@@ -206,11 +213,10 @@ public:
 private:
     MscOne(DeviceUID::TYPE uidType, uint8_t family, uint8_t addr, FDCAN_HandleTypeDef* can)
             : BaseDevice(uidType, family, addr, can)
-            ,ds2482(I2CMaster, DS2482_I2C_ADDR, *this)
-            ,eeprom(&I2CMaster, EEPROM_I2C_ADDR)
-            ,OWDevices(OneWire::DevicePool(ds2482))
+            , eeprom(&I2CMaster, EEPROM_I2C_ADDR)
+            , oneWirePort1(PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID0_GPIO_Port, ID0_Pin))
     {}
-
+    OneWirePort oneWirePort1;
     I2C I2CMaster;
     inline static ADCc3 AdcA1;
     inline static ADCc2 AdcA2;
@@ -241,8 +247,6 @@ private:
         return result;
     }()};
     Eeprom24AAUID eeprom;
-    OneWire::DS2482 ds2482;
-    OneWire::DevicePool OWDevices;
 };
 
 void SendMsg(char dest, char msgType, const char *data, char dlc)

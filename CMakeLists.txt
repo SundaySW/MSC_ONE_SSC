@@ -18,22 +18,29 @@ set(DEVICE_FULL_NAME    STM32G431CBTX)
 
 include(cmake/utils.cmake)
 
+include_directories(
+        App
+        Core
+        Drivers
+        Libs
+)
+
 add_subdirectory(Drivers)
-add_subdirectory(Libs)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/Core/*.*
         ${CMAKE_CURRENT_SOURCE_DIR}/App/*.*
+        ${CMAKE_CURRENT_SOURCE_DIR}/Libs/*.*
         )
 
-add_executable(${PROJECT_NAME} Core/Src/main.c Core/Startup/startup_stm32g431cbtx.s)
+add_executable(${PROJECT_NAME} Core/Src/main.c)
 
 target_include_directories(${PROJECT_NAME}
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/Core
         ${CMAKE_CURRENT_SOURCE_DIR}/Core/Inc
-        ${CMAKE_CURRENT_SOURCE_DIR}/Core/Startup
         ${CMAKE_CURRENT_SOURCE_DIR}/App
+        ${CMAKE_CURRENT_SOURCE_DIR}/Libs
         )
 
 target_sources(${PROJECT_NAME}
@@ -47,7 +54,7 @@ set_target_properties(${PROJECT_NAME}
         C_STANDARD 11
         C_EXTENSIONS ON
         CMAKE_C_STANDARD_REQUIRED ON
-        CXX_STANDARD 17
+        CXX_STANDARD 20
         CXX_EXTENSIONS ON
         CMAKE_CXX_STANDARD_REQUIRED ON
         )
@@ -55,10 +62,7 @@ set_target_properties(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
         ${PROJECT_NAME}-Drivers
-        ${PROJECT_NAME}-Libs
         )
-
-target_link_libraries(${PROJECT_NAME}-Libs PUBLIC ${PROJECT_NAME}-Drivers)
 
 target_link_options(${PROJECT_NAME}
         PUBLIC
