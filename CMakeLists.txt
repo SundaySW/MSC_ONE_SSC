@@ -77,8 +77,9 @@ utils_target_generate_hex(${PROJECT_NAME})
 utils_target_generate_bin(${PROJECT_NAME})
 utils_target_print_size(${PROJECT_NAME})
 
-#target_compile_options(${PROJECT_NAME}
-#        PRIVATE
+target_compile_options(${PROJECT_NAME}
+        PRIVATE
+        -Wno-volatile
 #        -Wall
 #        -Wextra
 #        -Wpedantic
@@ -90,7 +91,7 @@ utils_target_print_size(${PROJECT_NAME})
 #        -Wshadow
 #        -Wconversion
 #        -Wsign-conversion
-#        )
+        )
 
 #if(RTT_LOG)
 #    add_subdirectory(libs/rtt)

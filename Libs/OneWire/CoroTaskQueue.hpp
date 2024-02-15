@@ -9,7 +9,7 @@ public:
     void push(T new_elem){
         if(cursor < Size)
             cursor++;
-        storage[cursor] = new_elem;
+        storage[cursor] = std::forward<T>(new_elem);
     }
 
     bool emplace(T&& elem){
@@ -25,7 +25,7 @@ public:
     }
 
     bool empty() const {
-        return true;
+        return false;
     }
 private:
     std::size_t cursor = 0;

@@ -14,6 +14,7 @@ extern "C"
         __HAL_TIM_CLEAR_IT(&htim2, TIM_IT_UPDATE); // pww capture_c1-2
         __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE); // pwm gen_c4
         __HAL_TIM_CLEAR_IT(&htim4, TIM_IT_UPDATE); // pww capture_c1-2
+        __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim8, TIM_IT_UPDATE); // pwm gen_c1
         __HAL_TIM_CLEAR_IT(&htim15, TIM_IT_UPDATE); // pwm gen_c2
     }
@@ -79,11 +80,16 @@ extern "C"
     {
         MscOne::getInstance().processTimCallBack(htim);
     }
-
+    bool b = true;
     void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM1){
-            HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+//            HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+            MscOne::getInstance().PlacingCoroTask(b);
+            b = !b;
+        }
+        if(htim->Instance == TIM7){
+            MscOne::getInstance().PassToOw();
         }
     }
 

@@ -3,6 +3,7 @@
 #include "stm32g4xx_hal.h"
 #include <cstring>
 #include <functional>
+#include "optional"
 #include <array>
 
 #include "protos_core/protos_msg.h"
@@ -28,6 +29,8 @@
 
 using namespace Protos;
 
+#define CastArg(v, t)  std::launder(static_cast<std::optional<decltype(t)>*>(v))
+
 class MscOne : public BaseDevice
 {
 public:
@@ -42,6 +45,11 @@ public:
         static auto self = MscOne(DeviceUID::TYPE_MICROCHIP, 0x01, 0x33, &hfdcan1);
         return self;
     }
+
+    void PassToOw(){
+        oneWirePort1.TimItHandler();
+    }
+
     void initPerf(ADC_HandleTypeDef *adc1,
                   ADC_HandleTypeDef *adc2,
                   I2C_HandleTypeDef *i2c2,
@@ -113,7 +121,7 @@ public:
     }
 
     static void saveCalibParamToEEPROM(char ID, float* data){
-        for(int i = 0; i < Params.size(); i++){
+        for(std::size_t i = 0; i < Params.size(); i++){
             if(Params[i] == nullptr) continue;
             if(Params[i]->GetId() == ID){
                 char buffer[EEPROM_CALIB_DATA_SIZE];
@@ -125,7 +133,7 @@ public:
     }
 
     static void loadCalibParamsDataFromEEPROM(){
-        for(int i = 0; i < Params.size(); i++){
+        for(std::size_t i = 0; i < Params.size(); i++){
             if(Params[i] == nullptr) continue;
             CalibrParam* calibPtr = nullptr;
             Params[i]->QueryInterface(IID_CALIBRATEABLE, (void*&)calibPtr);
@@ -172,22 +180,20 @@ public:
         }
     };
 
-    void PlacingCoroTask(){
-        oneWirePort1.WScratchpad(std::array<char, 8> {0,1,2,3,4,5,6,7});
+    void PlacingCoroTask(bool b){
+        oneWirePort1.PlaceTask(OneW_Coro::blink_led, b, [&](void* ret_val_ptr){
+            auto* ret_val = CastArg(ret_val_ptr, b);
+            if(ret_val->has_value())
+                auto c = ret_val->value();
+            int d = 0;
+//            SendProtosMsg(0xFF, MSGTYPE_CMDMISC, data);
+        });
     }
 
 	void OnPoll() override {
-        oneWirePort1.PollPort([&](OneW_Coro::CoroTask task){ ProcessOneWTaskResult(std::move(task)); });
         for (auto* param : Params)
             if(param != nullptr) param->Poll();
 	};
-
-    void ProcessOneWTaskResult(OneW_Coro::CoroTask task){
-        if(task.type == OneW_Coro::read_scratchpad){
-            auto data = task.GetStoredArg<std::array<char,8>>();
-            SendProtosMsg(0xFF, MSGTYPE_CMDMISC, data);
-        }
-    }
 
 	void OnTimer(int ms) override{
         for (auto param : Params)

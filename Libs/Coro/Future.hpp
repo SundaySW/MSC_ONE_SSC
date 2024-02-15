@@ -127,18 +127,21 @@ public:
         event_.Notify();
     }
 
-    ret_val_t GetRetVal(){
-        return ret_value_;
-    }
-
     void NotifyAwaiter(){
         event_.Notify();
     }
 
+    ret_val_t GetRetVal(){
+        return ret_value_;
+    }
+
     ARG_T GetArgumentValue(){
-        auto ret_val = stored_value_.value();
-        stored_value_.reset();
-        return ret_val;
+        if(stored_value_.has_value()){
+            auto ret_val = stored_value_.value();
+            stored_value_.reset();
+            return ret_val;
+        }else
+            return {};
     }
 
     constexpr bool HasStoredArgument(){
@@ -154,8 +157,8 @@ public:
     }
 
 private:
-    arg_val_t stored_value_;
-    ret_val_t ret_value_;
+    arg_val_t stored_value_ = std::nullopt;
+    ret_val_t ret_value_ = std::nullopt;
     Event event_;
     std::coroutine_handle<Promise> handle_;
 };
