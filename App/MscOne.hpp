@@ -31,6 +31,8 @@ using namespace Protos;
 
 #define CastArg(v, t)  std::launder(static_cast<std::optional<decltype(t)>*>(v))
 
+#define CastArg2(void_ptr, type)  std::launder(static_cast<std::optional<type>*>(void_ptr))
+
 class MscOne : public BaseDevice
 {
 public:
@@ -48,6 +50,10 @@ public:
 
     void PassToOw(){
         oneWirePort1.TimItHandler();
+    }
+
+    void PollCoro(){
+        oneWirePort1.Poll();
     }
 
     void initPerf(ADC_HandleTypeDef *adc1,
@@ -118,6 +124,8 @@ public:
 		Valve0Ctrl.Start();
 		Valve1Ctrl.Start();
 //        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
+//        CoroTaskWrite(std::array<char, 3>{1,1,1});
+        CoroTaskRead();
     }
 
     static void saveCalibParamToEEPROM(char ID, float* data){
@@ -179,14 +187,21 @@ public:
                 break;
         }
     };
+    
+    void CoroTaskWrite(std::array<char, 3> data){
+        oneWirePort1.PlaceTask(OneW_Coro::write_scratchpad, data, [&](void* ret_val_ptr){
+            int c = 0;
+        });
+    }
 
-    void PlacingCoroTask(bool b){
-        oneWirePort1.PlaceTask(OneW_Coro::blink_led, b, [&](void* ret_val_ptr){
-            auto* ret_val = CastArg(ret_val_ptr, b);
-            if(ret_val->has_value())
-                auto c = ret_val->value();
-            int d = 0;
-//            SendProtosMsg(0xFF, MSGTYPE_CMDMISC, data);
+    void CoroTaskRead(){
+        oneWirePort1.PlaceTask(OneW_Coro::read_scratchpad, (uint8_t)1, [&](void* ret_val_ptr){
+            using d = std::array<char, 3>;
+            auto* ret_val = CastArg2(ret_val_ptr, d);
+            if(ret_val->has_value()){
+                auto& v = ret_val->value();
+                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size()-1);
+            }
         });
     }
 
