@@ -98,16 +98,21 @@ public:
             return {};
     }
 
-    void Resume(){
+    void HandleResume(){
         handle_.promise().Resume();
         if(handle_)
             handle_.resume();
     }
 
+    void Resume(){
+        if(CanResume())
+            HandleResume();
+    }
+
     void Resume(arg_val_t val){
         stored_value_ = std::move(val);
         if(CanResume())
-            Resume();
+            HandleResume();
     }
 
     bool CanResume(){

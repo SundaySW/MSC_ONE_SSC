@@ -4,8 +4,7 @@
 
 #include <cstdint>
 #include "type_traits"
-
-#include "stm32g431xx.h"
+#include "stm32g4xx_hal_gpio.h"
 
 namespace PIN_BOARD{
 
@@ -69,23 +68,28 @@ public:
     }
 
     constexpr void setAsOutput(){
-        port_->MODER = (port_->MODER & ~(0x03 << (2 * pin_))) | (0x01 << (2 * pin_));
+        port_->MODER = (port_->MODER & ~(0x03 << (2 * position_))) | (0x01 << (2 * position_));
     }
 
     constexpr void setAsInput(){
-        port_->MODER = port_->MODER & (0x03 << (2 * pin_));
+        port_->MODER = port_->MODER & ~(0x03 << (2 * position_));
     }
 
     constexpr explicit PIN(GPIO_TypeDef* incomePortPtr, uint16_t incomePin)
             : port_(incomePortPtr),
               pin_(incomePin)
-    {};
+    {
+      for(uint8_t i = 0; i < 32; i++)
+          if(pin_ >> i)
+              position_ = i;
+    };
 
 protected:
 private:
     LOGIC_LEVEL currentState_ = LOW;
     GPIO_TypeDef* port_;
     uint16_t pin_;
+    uint8_t position_;
     bool inverted_ = false;
 
     template<typename T = InterfaceType>

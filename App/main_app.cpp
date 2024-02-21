@@ -80,10 +80,17 @@ extern "C"
     {
         MscOne::getInstance().processTimCallBack(htim);
     }
+    uint8_t cnt = 3;
     void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM1){
             HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+            if(!cnt){
+                cnt = 3;
+                MscOne::getInstance().Tasks();
+            }
+            if(cnt)
+                cnt--;
             MscOne::getInstance().PollCoro();
         }
         if(htim->Instance == TIM7){

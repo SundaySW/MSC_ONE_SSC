@@ -29,8 +29,6 @@
 
 using namespace Protos;
 
-#define CastArg(v, t)  std::launder(static_cast<std::optional<decltype(t)>*>(v))
-
 #define CastArg2(void_ptr, type)  std::launder(static_cast<std::optional<type>*>(void_ptr))
 
 class MscOne : public BaseDevice
@@ -44,7 +42,7 @@ public:
     MscOne& operator = (MscOne const &) = delete;
 
     static MscOne& getInstance(){
-        static auto self = MscOne(DeviceUID::TYPE_MICROCHIP, 0x01, 0x33, &hfdcan1);
+        static auto self = MscOne(DeviceUID::TYPE_MICROCHIP, 0x01, 0x20, &hfdcan1);
         return self;
     }
 
@@ -123,9 +121,18 @@ public:
         TimIC1.Start();
 		Valve0Ctrl.Start();
 		Valve1Ctrl.Start();
+//        oneWirePort1.SetPinLow();
 //        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
-//        CoroTaskWrite(std::array<char, 3>{1,1,1});
+    }
+    bool c = false;
+    void Tasks(){
+//        oneWirePort1.PlaceTask(OneW_Coro::blink_led, c, [&](void* ret_val_ptr){
+//            c = !c;
+//        });
+//        CoroTaskRead();
+//        CoroTaskWrite(std::array<char, 8>{1,1,1,1,1,1,1,1});
         CoroTaskRead();
+//        SearchCoro();
     }
 
     static void saveCalibParamToEEPROM(char ID, float* data){
@@ -187,20 +194,25 @@ public:
                 break;
         }
     };
-    
-    void CoroTaskWrite(std::array<char, 3> data){
-        oneWirePort1.PlaceTask(OneW_Coro::write_scratchpad, data, [&](void* ret_val_ptr){
+
+    void SearchCoro(){
+        oneWirePort1.PlaceTask(OneW_Coro::search_coro, 0xF0, [&](void* ret_val_ptr){
             int c = 0;
         });
     }
 
+    void CoroTaskWrite(std::array<char, 8> data){
+        oneWirePort1.PlaceTask(OneW_Coro::write_scratchpad, data, [&](void* ret_val_ptr){
+            int c = 0;
+        });
+    }
     void CoroTaskRead(){
         oneWirePort1.PlaceTask(OneW_Coro::read_scratchpad, (uint8_t)1, [&](void* ret_val_ptr){
-            using d = std::array<char, 3>;
+            using d = std::array<char, 8>;
             auto* ret_val = CastArg2(ret_val_ptr, d);
             if(ret_val->has_value()){
                 auto& v = ret_val->value();
-                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size()-1);
+                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
             }
         });
     }
@@ -210,7 +222,7 @@ public:
             if(param != nullptr) param->Poll();
 	};
 
-	void OnTimer(int ms) override{
+	void OnTimer(short ms) override{
         for (auto param : Params)
             if(param != nullptr) param->OnTimer(ms);
 	};
@@ -236,7 +248,9 @@ private:
             : BaseDevice(uidType, family, addr, can)
             , eeprom(&I2CMaster, EEPROM_I2C_ADDR)
             , oneWirePort1(PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID0_GPIO_Port, ID0_Pin))
-    {}
+    {
+
+    }
     OneWirePort oneWirePort1;
     I2C I2CMaster;
     inline static ADCc3 AdcA1;
