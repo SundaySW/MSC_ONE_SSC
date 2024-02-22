@@ -6,7 +6,7 @@
 #include "Event.hpp"
 
 template <typename RET_T, typename ARG_T = RET_T>
-class Future
+class Task
 {
     class Promise
     {
@@ -23,8 +23,7 @@ class Future
             suspended_ = true;
             return {};
         }
-        void unhandled_exception() {
-        }
+        void unhandled_exception() {}
 
         std::suspend_always yield_value(RET_T v) {
             suspended_ = true;
@@ -44,9 +43,9 @@ class Future
             MemoryAllocator::Deallocate(ptr);
         }
 
-        inline Future<RET_T, ARG_T> get_return_object()
+        inline Task<RET_T, ARG_T> get_return_object()
         {
-            return Future{ std::coroutine_handle<Promise>::from_promise(*this) };
+            return Task{ std::coroutine_handle<Promise>::from_promise(*this) };
         }
 
         void return_void() {
@@ -72,11 +71,11 @@ public:
     using ret_val_t = typename Promise::return_val_type;
     using arg_val_t = typename Promise::arg_val_type;
 
-    explicit Future(std::coroutine_handle<Promise> handle)
+    explicit Task(std::coroutine_handle<Promise> handle)
             : handle_(handle)
     {}
 
-    ~Future() {
+    ~Task() {
         if (handle_)
             handle_.destroy();
     }

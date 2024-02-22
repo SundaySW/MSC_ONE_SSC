@@ -13,7 +13,7 @@
 #include "HW/IO/pin.hpp"
 
 #include "Coro/Event.hpp"
-#include "Coro/Future.hpp"
+#include "Coro/Task.hpp"
 #include "CoroTaskQueue.hpp"
 
 #include "main.h"
@@ -238,7 +238,7 @@ public:
     }
 
 private:
-    using Future_uint = Future<char>;
+    using Future_uint = Task<char>;
 
     Future_uint write_bit_coro_ = WriteBit();
     Future_uint read_bit_coro_ = ReadBit();
@@ -271,7 +271,7 @@ public:
     using wscrpd_arg_t = std::array<uint8_t, 8>;
     using wscrpd_ret_t = uint8_t;
 private:
-    Future<wscrpd_ret_t, wscrpd_arg_t> write_scratchpad_coro_ = WriteScratchpad(write_scratchpad_coro_);
+    Task<wscrpd_ret_t, wscrpd_arg_t> write_scratchpad_coro_ = WriteScratchpad(write_scratchpad_coro_);
     decltype(write_scratchpad_coro_) WriteScratchpad(decltype(write_scratchpad_coro_)& this_coro_){
         while (true){
             auto arg = this_coro_.GetArgumentValue();
@@ -286,7 +286,7 @@ private:
             co_yield {};
         }
     }
-    Future<std::array<char, 8>, uint8_t> read_scratchpad_coro_ = ReadScratchpad(read_scratchpad_coro_);
+    Task<std::array<char, 8>, uint8_t> read_scratchpad_coro_ = ReadScratchpad(read_scratchpad_coro_);
     decltype(read_scratchpad_coro_) ReadScratchpad(decltype(read_scratchpad_coro_)& this_coro_){
         decltype(read_scratchpad_coro_)::value_type buff{};
         while (true){
@@ -307,7 +307,7 @@ private:
     }
 
     PIN_BOARD::PIN<PIN_BOARD::PinWriteable> led_pin_ = PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(LED1_GPIO_Port, LED1_Pin);
-    Future<bool> blink_led_coro_ = BlinkLed(blink_led_coro_);
+    Task<bool> blink_led_coro_ = BlinkLed(blink_led_coro_);
     decltype(blink_led_coro_) BlinkLed(decltype(blink_led_coro_)& this_coro_){
         while (true){
             auto arg = this_coro_.GetArgumentValue();

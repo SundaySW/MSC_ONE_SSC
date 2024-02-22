@@ -4,7 +4,7 @@
 
 class MemoryAllocator{
 
-static const uint32_t kCapacity = 2048;
+static const uint32_t kCapacity = 1280;
 
 public:
     static void* Allocate(std::size_t size) {
