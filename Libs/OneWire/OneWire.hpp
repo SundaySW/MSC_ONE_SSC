@@ -5,6 +5,7 @@
 #include "queue"
 #include "variant"
 #include "functional"
+#include <cstddef>
 
 #include "stm32g4xx.h"
 #include "stm32g4xx_hal_tim.h"
@@ -16,6 +17,21 @@
 #include "CoroTaskQueue.hpp"
 
 #include "main.h"
+
+#define tSlot                   65
+#define tW1l                    10
+#define tW0l                    55
+#define tRL                     2
+#define tMSR                    7
+#define tRSTL                   480
+#define tRSTH                   tRSTL
+#define tPDH                    17
+#define tPDL                    65
+#define tMSP                    65
+
+#define storage_size            (8 * sizeof(float))
+//#define max_alignment           alignof(alignof(std::max_align_t))
+#define max_alignment           alignof(float)
 
 namespace OneW::CMD {
     enum CMD
@@ -76,28 +92,28 @@ namespace OneW_Coro{
             finished = true;
             call_back(static_cast<void*>(ret_storage_));
         }
-        void* coro_ptr;
-        Coro_task_t type;
+        void* coro_ptr{};
+        Coro_task_t type = no_type;
         std::function<void(void *)> call_back;
     private:
         bool finished{false};
-        std::byte arg_storage_[40];
-        std::byte ret_storage_[40];
+        alignas(max_alignment) std::byte arg_storage_[storage_size]{};
+        alignas(max_alignment) std::byte ret_storage_[storage_size]{};
     };
 }
+//template<typename T>
+//struct storage{
+//    void store(T value){
+//        new(m_storage_)(T)(value);
+//    }
+//    T* getPtr(){
+//        return std::launder( static_cast<T*>( static_cast<void*>(m_storage_) ) );
+//    }
+//private:
+//    std::aligned_storage_t<sizeof(T), alignof(T)> m_storage_;
+//};
 
 class OneWirePort{
-#define tSlot                   65
-#define tW1l                    10
-#define tW0l                    55
-#define tRL                     2
-#define tMSR                    7
-#define tRSTL                   480
-#define tRSTH                   tRSTL
-#define tPDH                    17
-#define tPDL                    65
-#define tMSP                    65
-
 #define SWITCH_CONTEXT          co_await Delay(1);
 
 #define RESET_OW_LINE           reset_coro_.Resume(); \
@@ -132,10 +148,7 @@ public:
             : pin_(pin)
             , htim_(htim)
     {}
-    void SetPinLow(){
-        pin_.setAsOutput();
-        pin_.setValue(PIN_BOARD::LOW);
-    }
+
     void TimItHandler(){
         if(in_process){
 //            HAL_TIM_Base_Stop_IT(htim_);
@@ -147,7 +160,7 @@ public:
     void SetTim(TIM_HandleTypeDef* tim){
         htim_ = tim;
     }
-    
+
     auto Poll(){
         if(!in_process)
             RunCoro();
@@ -157,7 +170,6 @@ public:
     void PlaceTask(OneW_Coro::Coro_task_t type, ArgT&& arg, std::function<void(void *)> call_back){
         auto coro = OneW_Coro::CoroTask(type);
         coro.call_back = std::move(call_back);
-
         if(type == OneW_Coro::write_scratchpad){
 //            static_assert(std::is_same <decltype(write_scratchpad_coro_.GetArgumentValue()), ArgT>().value);
             coro.coro_ptr = static_cast<void*>(&write_scratchpad_coro_);
@@ -170,9 +182,7 @@ public:
 
         else if(type == OneW_Coro::search_coro){
             coro.coro_ptr = static_cast<void*>(&search_coro_);
-
         }
-
         coro.StoreArgument(std::forward<ArgT>(arg));
         coro_to_run.push(coro);
         RunCoro();
@@ -257,8 +267,11 @@ private:
 //            decltype(multiple_array_coro_),
 //            decltype(read_scratchpad_coro_)
 //    >;
-
-    Future<uint8_t, std::array<char, 8>> write_scratchpad_coro_ = WriteScratchpad(write_scratchpad_coro_);
+public:
+    using wscrpd_arg_t = std::array<uint8_t, 8>;
+    using wscrpd_ret_t = uint8_t;
+private:
+    Future<wscrpd_ret_t, wscrpd_arg_t> write_scratchpad_coro_ = WriteScratchpad(write_scratchpad_coro_);
     decltype(write_scratchpad_coro_) WriteScratchpad(decltype(write_scratchpad_coro_)& this_coro_){
         while (true){
             auto arg = this_coro_.GetArgumentValue();
@@ -266,7 +279,7 @@ private:
             if(LINE_RESETED_OK){
                 SEND_OW_CMD(OneW::CMD::SKIP_ROM);
                 SEND_OW_CMD(OneW::CMD::WRITE_SCRATCHPAD);
-                for(char& ch: arg)
+                for(auto& ch: arg)
                     SEND_DATA_BYTE(ch);
             }
             FinishCoro(this_coro_);
@@ -282,7 +295,7 @@ private:
 //                SEND_OW_CMD(OneW::CMD::SKIP_ROM);
 //                SEND_OW_CMD(OneW::CMD::READ_SCRATCHPAD);
                 SEND_OW_CMD(0x33);
-                for(char& i : buff){
+                for(auto& i : buff){
                     READ_DATA_BYTE;
                     i = read_byte_coro_.GetRetVal().value();
                 }

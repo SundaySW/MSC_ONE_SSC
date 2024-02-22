@@ -7,6 +7,12 @@
 #include "MscOne.hpp"
 #include "tim.h"
 
+//void* operator new(std::size_t n) {
+//    return malloc(n);
+//}
+//void operator delete(void* p) throw() {
+//    free(p);
+//}
 extern "C"
 {
     void TIM_IT_clear_(){

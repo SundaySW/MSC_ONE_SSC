@@ -130,8 +130,8 @@ public:
 //            c = !c;
 //        });
 //        CoroTaskRead();
-//        CoroTaskWrite(std::array<char, 8>{1,1,1,1,1,1,1,1});
-        CoroTaskRead();
+        CoroTaskWrite(typename OneWirePort::wscrpd_arg_t {1,1,11,1,1,1,1,1});
+//        CoroTaskRead();
 //        SearchCoro();
     }
 
@@ -201,8 +201,9 @@ public:
         });
     }
 
-    void CoroTaskWrite(std::array<char, 8> data){
-        oneWirePort1.PlaceTask(OneW_Coro::write_scratchpad, data, [&](void* ret_val_ptr){
+    template<typename ArgT>
+    void CoroTaskWrite(ArgT&& data){
+        oneWirePort1.PlaceTask(OneW_Coro::write_scratchpad, std::forward<ArgT>(data), [&](void* ret_val_ptr){
             int c = 0;
         });
     }
@@ -251,6 +252,7 @@ private:
     {
 
     }
+
     OneWirePort oneWirePort1;
     I2C I2CMaster;
     inline static ADCc3 AdcA1;
