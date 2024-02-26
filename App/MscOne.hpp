@@ -124,14 +124,14 @@ public:
 //        oneWirePort1.SetPinLow();
 //        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
     }
-    bool c = false;
+
     void Tasks(){
 //        oneWirePort1.PlaceTask(OneW_Coro::blink_led, c, [&](void* ret_val_ptr){
 //            c = !c;
 //        });
 //        CoroTaskRead();
-        CoroTaskWrite(typename OneWirePort::wscrpd_arg_t {1,1,11,1,1,1,1,1});
-//        CoroTaskRead();
+        CoroTaskWrite();
+        CoroTaskRead();
 //        SearchCoro();
     }
 
@@ -201,14 +201,25 @@ public:
         });
     }
 
-    template<typename ArgT>
-    void CoroTaskWrite(ArgT&& data){
-        oneWirePort1.PlaceTask(OneW_Coro::write_scratchpad, std::forward<ArgT>(data), [&](void* ret_val_ptr){
+    void CoroTaskWrite(){
+        typename OneWirePort::wscrpd_arg_t arg = {0x20, 0, {4,4,11,4,4,4,4,4}};
+        oneWirePort1.PlaceTask(OneW_Coro::write_scratchpad, arg, [&](void* ret_val_ptr){
             int c = 0;
         });
+//        oneWirePort1.PlaceTask(OneW_Coro::copy_scratchpad, std::array<uint8_t,2>{arg.offset,arg.addr}, [&](void* ret_val_ptr){
+//            int c = 0;
+//        });
     }
     void CoroTaskRead(){
-        oneWirePort1.PlaceTask(OneW_Coro::read_scratchpad, (uint8_t)1, [&](void* ret_val_ptr){
+        oneWirePort1.PlaceTask(OneW_Coro::read_memory, (uint8_t)0x20, [&](void* ret_val_ptr){
+            using d = std::array<char, 8>;
+            auto* ret_val = CastArg2(ret_val_ptr, d);
+            if(ret_val->has_value()){
+                auto& v = ret_val->value();
+                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
+            }
+        });
+        oneWirePort1.PlaceTask(OneW_Coro::read_memory, (uint8_t)0x40, [&](void* ret_val_ptr){
             using d = std::array<char, 8>;
             auto* ret_val = CastArg2(ret_val_ptr, d);
             if(ret_val->has_value()){
@@ -219,13 +230,13 @@ public:
     }
 
 	void OnPoll() override {
-        for (auto* param : Params)
-            if(param != nullptr) param->Poll();
+//        for (auto* param : Params)
+//            if(param != nullptr) param->Poll();
 	};
 
 	void OnTimer(short ms) override{
-        for (auto param : Params)
-            if(param != nullptr) param->OnTimer(ms);
+//        for (auto param : Params)
+//            if(param != nullptr) param->OnTimer(ms);
 	};
 
     I2C& getI2CMaster(){
