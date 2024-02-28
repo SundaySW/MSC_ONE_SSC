@@ -66,13 +66,13 @@ class Task
     };
 
 public:
-    using value_type = RET_T;
+    using ret_t = RET_T;
     using promise_type = Promise;
     using ret_val_t = typename Promise::return_val_type;
     using arg_val_t = typename Promise::arg_val_type;
 
     explicit Task(std::coroutine_handle<Promise> handle)
-            : handle_(handle)
+        : handle_(handle)
     {}
 
     ~Task() {
@@ -98,9 +98,10 @@ public:
     }
 
     void HandleResume(){
-        handle_.promise().Resume();
-        if(handle_)
+        if(handle_){
+            handle_.promise().Resume();
             handle_.resume();
+        }
     }
 
     void Resume(){
@@ -109,20 +110,19 @@ public:
     }
 
     void Resume(arg_val_t val){
-        stored_value_ = std::move(val);
-        if(CanResume())
-            HandleResume();
+        arg_value_ = std::move(val);
+        Resume();
     }
 
     bool CanResume(){
         return !event_.IsWaiting() && handle_.promise().IsSuspended();
     }
 
-    void StoreArgument(arg_val_t val){
-        stored_value_ = std::move(val);
+    void StoreArg(arg_val_t val){
+        arg_value_ = std::move(val);
     }
 
-    void StoreRetVal(ret_val_t val){
+    void StoreRetV(ret_val_t val){
         ret_value_ = std::move(val);
     }
 
@@ -135,21 +135,21 @@ public:
         event_.Notify();
     }
 
-    ret_val_t GetRetVal(){
+    ret_val_t GetRetOpt(){
         return ret_value_;
     }
 
-    ARG_T GetArgumentValue(){
-        if(stored_value_.has_value()){
-            auto ret_val = stored_value_.value();
-            stored_value_.reset();
+    ARG_T GetArgV(){
+        if(arg_value_.has_value()){
+            auto ret_val = arg_value_.value();
+            arg_value_.reset();
             return ret_val;
         }else
             return {};
     }
 
-    constexpr bool HasStoredArgument(){
-        return stored_value_.has_value();
+    constexpr bool HasStoredArg(){
+        return arg_value_.has_value();
     }
 
     Event& GetEvent(){
@@ -161,7 +161,7 @@ public:
     }
 
 private:
-    arg_val_t stored_value_ = std::nullopt;
+    arg_val_t arg_value_ = std::nullopt;
     ret_val_t ret_value_ = std::nullopt;
     Event event_;
     std::coroutine_handle<Promise> handle_;

@@ -3,6 +3,7 @@
 #include <dac.h>
 #include <fdcan.h>
 #include <adc.h>
+#include "spi.h"
 #include "stm32g4xx_hal.h"
 #include "MscOne.hpp"
 #include "tim.h"
@@ -95,12 +96,19 @@ extern "C"
                 cnt = 10;
                 MscOne::getInstance().Tasks();
             }
-            if(cnt)
-                cnt--;
-            MscOne::getInstance().PollCoro();
+            else cnt--;
+            MscOne::getInstance().PollCoroPort();
         }
         if(htim->Instance == TIM7){
-            MscOne::getInstance().PassToOw();
+            MscOne::getInstance().MicroTimHandler();
+        }
+    }
+
+    void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
+    {
+        if(hspi == &hspi1)
+        {
+            MscOne::getInstance().Spi1Handler();
         }
     }
 

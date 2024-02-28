@@ -22,14 +22,14 @@
 #include "1Wire/onewire_device_pool.h"
 #include "1Wire/onewire_ds2482.h"
 #include "1Wire/onewire_task_provider.h"
-#include "OneWire/OneWire.hpp"
+#include "OneWire/one_wire.hpp"
 
 #define EEPROM_I2C_ADDR 0x50
 #define DS2482_I2C_ADDR 0x18
 
 using namespace Protos;
 
-#define CastArg2(void_ptr, type)  std::launder(static_cast<std::optional<type>*>(void_ptr))
+#define CastArg(void_ptr, type)  std::launder(static_cast<std::optional<type>*>(void_ptr))
 
 class MscOne : public BaseDevice
 {
@@ -46,11 +46,18 @@ public:
         return self;
     }
 
-    void PassToOw(){
+    void MicroTimHandler(){
         oneWirePort1.TimItHandler();
     }
 
-    void PollCoro(){
+    void Spi1Handler(){
+
+    }
+
+    void PollCoroPort(){
+//        if(oneWirePort1.IsNewConnected()){
+//            CoroTaskRead();
+//        }
         oneWirePort1.Poll();
     }
 
@@ -121,16 +128,11 @@ public:
         TimIC1.Start();
 		Valve0Ctrl.Start();
 		Valve1Ctrl.Start();
-//        oneWirePort1.SetPinLow();
 //        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
     }
 
     void Tasks(){
-//        oneWirePort1.PlaceTask(OneW_Coro::blink_led, c, [&](void* ret_val_ptr){
-//            c = !c;
-//        });
-//        CoroTaskRead();
-        CoroTaskWrite();
+//        CoroTaskWrite();
         CoroTaskRead();
 //        SearchCoro();
     }
@@ -196,24 +198,20 @@ public:
     };
 
     void SearchCoro(){
-        oneWirePort1.PlaceTask(OneW_Coro::search_coro, 0xF0, [&](void* ret_val_ptr){
+        oneWirePort1.PlaceTask(OneW_Coro::search, 0xF0, [&](void* ret_val_ptr){
             int c = 0;
         });
     }
 
     void CoroTaskWrite(){
-        typename OneWirePort::wscrpd_arg_t arg = {0x20, 0, {4,4,11,4,4,4,4,4}};
-        oneWirePort1.PlaceTask(OneW_Coro::write_scratchpad, arg, [&](void* ret_val_ptr){
-            int c = 0;
-        });
-//        oneWirePort1.PlaceTask(OneW_Coro::copy_scratchpad, std::array<uint8_t,2>{arg.offset,arg.addr}, [&](void* ret_val_ptr){
-//            int c = 0;
-//        });
+        typename OneWirePort::wscrpd_arg_t arg = {0x20, 0, {7,7,11,7,7,7,7,7}};
+        oneWirePort1.PlaceTask(OneW_Coro::write_memory, arg, [&](void* ret_val_ptr){});
     }
+
     void CoroTaskRead(){
         oneWirePort1.PlaceTask(OneW_Coro::read_memory, (uint8_t)0x20, [&](void* ret_val_ptr){
-            using d = std::array<char, 8>;
-            auto* ret_val = CastArg2(ret_val_ptr, d);
+            using d = typename std::array<char, 8>;
+            auto* ret_val = CastArg(ret_val_ptr, d);
             if(ret_val->has_value()){
                 auto& v = ret_val->value();
                 SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
@@ -221,7 +219,7 @@ public:
         });
         oneWirePort1.PlaceTask(OneW_Coro::read_memory, (uint8_t)0x40, [&](void* ret_val_ptr){
             using d = std::array<char, 8>;
-            auto* ret_val = CastArg2(ret_val_ptr, d);
+            auto* ret_val = CastArg(ret_val_ptr, d);
             if(ret_val->has_value()){
                 auto& v = ret_val->value();
                 SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
@@ -252,7 +250,7 @@ public:
 
     static void processTimCallBack(TIM_HandleTypeDef* htim){
         if(htim == TimIC0.getHTim())
-            TimIC0.OnCollBack();
+            TimIC0.OnCallBack();
     }
 
 private:

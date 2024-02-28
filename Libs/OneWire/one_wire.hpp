@@ -23,14 +23,15 @@
 #define tW0l                    55
 #define tRL                     1
 #define tMSR                    10
-#define tRSTL                   480
+#define tRSTL                   490
 #define tRSTH                   tRSTL
 #define tPDH                    17
 #define tPDL                    65
 #define tMSP                    60
+#define tProg                   10000
 
 #define storage_size            (8 * sizeof(float))
-//#define max_alignment           alignof(alignof(std::max_align_t))
+//#define max_alignment           alignof(std::max_align_t)
 #define max_alignment           alignof(float)
 
 namespace OneW::CMD {
@@ -53,35 +54,31 @@ namespace OneW::CMD {
 namespace OneW_Coro{
     enum Coro_task_t{
         no_type,
-        copy_scratchpad,
-        write_scratchpad,
+        write_memory,
         read_memory,
-        search_coro
+        search
     };
 
     struct CoroTask{
         CoroTask() = default;
         explicit CoroTask(Coro_task_t t)
-                :type(t)
+            :type(t)
         {};
         template<typename T>
-        T* GetStoredArg(){
+        T* GetStoredArgPtr(){
             return std::launder( static_cast<T*>( static_cast<void*>(arg_storage_) ) );
         }
-        void* GetArgStoragePtr(){
-            return static_cast<void*>(arg_storage_);
+        template<typename T>
+        void StoreArgumentValue(T v){
+            new(arg_storage_)(T)(v);
         }
         template<typename T>
-        void StoreArgument(T arg){
-            new(arg_storage_)(T)(arg);
-        }
-        template<typename T>
-        T* GetRetValRef(){
+        T* GetRetValPtr(){
             return std::launder( static_cast<T*>( static_cast<void*>(ret_storage_) ) );
         }
         template<typename T>
-        void StoreRetVal(T arg){
-            new(ret_storage_)(T)(arg);
+        void StoreRetVal(T v){
+            new(ret_storage_)(T)(v);
         }
         void CallAwaiter(){
             finished = true;
@@ -96,24 +93,13 @@ namespace OneW_Coro{
         alignas(max_alignment) std::byte ret_storage_[storage_size]{};
     };
 }
-template<typename T>
-struct storage{
-    void store(T value){
-        new(m_storage_)(T)(value);
-    }
-    T* getPtr(){
-        return std::launder( static_cast<T*>( static_cast<void*>(m_storage_) ) );
-    }
-private:
-    std::aligned_storage_t<sizeof(T), alignof(T)> m_storage_;
-};
 
 class OneWirePort{
 #define SWITCH_CONTEXT          co_await Delay(1);
 
 #define RESET_OW_LINE           reset_coro_.Resume(); \
                                 co_await reset_coro_; \
-                                auto static line_reset_ok = !reset_coro_.GetRetVal().value(); \
+                                auto static line_reset_ok = !reset_coro_.GetRetOpt().value(); \
                                 SWITCH_CONTEXT
 
 #define LINE_RESETED_OK         line_reset_ok
@@ -152,6 +138,19 @@ public:
         }
     }
 
+    bool IsNewConnected(){
+        auto ret = false;
+        if(UpdateState() && !last_state_)
+            ret = true;
+        last_state_ = current_state_;
+        return ret;
+    }
+
+    bool UpdateState(){
+        current_state_ = pin_.getState();
+        return current_state_;
+    }
+
     void SetTim(TIM_HandleTypeDef* tim){
         htim_ = tim;
     }
@@ -166,20 +165,17 @@ public:
         auto coro = OneW_Coro::CoroTask(type);
         coro.call_back = std::move(call_back);
 
-        if(type == OneW_Coro::write_scratchpad){
-//            static_assert(std::is_same <decltype(write_scratchpad_coro_.GetArgumentValue()), ArgT>().value);
+        if(type == OneW_Coro::write_memory){
+//            static_assert(std::is_same <decltype(write_scratchpad_coro_.GetArgV()), ArgT>().value);
             coro.coro_ptr = static_cast<void*>(&write_scratchpad_coro_);
         }
-        else if(type == OneW_Coro::copy_scratchpad)
-            coro.coro_ptr = static_cast<void*>(&copy_scratchpad_coro_);
-
-        else if(type == OneW_Coro::search_coro)
+        else if(type == OneW_Coro::search)
             coro.coro_ptr = static_cast<void*>(&search_coro_);
 
         else if(type == OneW_Coro::read_memory)
             coro.coro_ptr = static_cast<void*>(&read_memory_coro_);
 
-        coro.StoreArgument(std::forward<ArgT>(arg));
+        coro.StoreArgumentValue(std::forward<ArgT>(arg));
         coro_to_run.push(coro);
         RunCoro();
     }
@@ -190,23 +186,18 @@ public:
             running_task = coro_to_run.front();
             coro_to_run.pop();
 
-            if(running_task.type == OneW_Coro::write_scratchpad){
-                auto& arg = *running_task.GetStoredArg<decltype(write_scratchpad_coro_.GetArgumentValue())>();
+            if(running_task.type == OneW_Coro::write_memory){
+                auto& arg = *running_task.GetStoredArgPtr<decltype(write_scratchpad_coro_.GetArgV())>();
                 static_cast<decltype(write_scratchpad_coro_)*>(running_task.coro_ptr)->Resume(arg);
             }
 
-            else if(running_task.type == OneW_Coro::copy_scratchpad){
-                auto& arg = *running_task.GetStoredArg<decltype(copy_scratchpad_coro_.GetArgumentValue())>();
-                static_cast<decltype(copy_scratchpad_coro_)*>(running_task.coro_ptr)->Resume(arg);
-            }
-
-            else if(running_task.type == OneW_Coro::search_coro){
-                auto& arg = *running_task.GetStoredArg<decltype(search_coro_.GetArgumentValue())>();
+            else if(running_task.type == OneW_Coro::search){
+                auto& arg = *running_task.GetStoredArgPtr<decltype(search_coro_.GetArgV())>();
                 static_cast<decltype(search_coro_)*>(running_task.coro_ptr)->Resume(arg);
             }
 
             else if(running_task.type == OneW_Coro::read_memory){
-                auto& arg = *running_task.GetStoredArg<decltype(read_memory_coro_.GetArgumentValue())>();
+                auto& arg = *running_task.GetStoredArgPtr<decltype(read_memory_coro_.GetArgV())>();
                 static_cast<decltype(read_memory_coro_)*>(running_task.coro_ptr)->Resume(arg);
             }
 
@@ -214,7 +205,7 @@ public:
     }
 
     void FinishCoro(auto& coro_ref){
-        running_task.StoreRetVal(coro_ref.GetRetVal());
+        running_task.StoreRetVal(coro_ref.GetRetOpt());
         running_task.CallAwaiter();
         in_process = false;
     }
@@ -250,6 +241,8 @@ private:
     CoroTask running_task {};
 
     PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> pin_;
+    bool last_state_ = false;
+    bool current_state_ = false;
     Event timer_ev_;
     TIM_HandleTypeDef* htim_;
 
@@ -266,7 +259,7 @@ private:
 //    >;
 public:
     struct Write_Coro_Arg{
-        uint8_t offset;
+        uint8_t offset{0x20};
         uint8_t addr{0};
         std::array<uint8_t, 8> data;
     };
@@ -276,40 +269,47 @@ private:
     Task<wscrpd_ret_t, wscrpd_arg_t> write_scratchpad_coro_ = WriteScratchpad(write_scratchpad_coro_);
     decltype(write_scratchpad_coro_) WriteScratchpad(decltype(write_scratchpad_coro_)& this_coro_){
         while (true){
-            auto arg = this_coro_.GetArgumentValue();
+            auto arg = this_coro_.GetArgV();
             RESET_OW_LINE
             if(LINE_RESETED_OK){
                 SEND_OW_CMD(OneW::CMD::SKIP_ROM)
                 SEND_OW_CMD(OneW::CMD::WRITE_SCRATCHPAD)
                 SEND_DATA_BYTE(arg.offset)
-                SEND_DATA_BYTE(0)
+                SEND_DATA_BYTE(arg.addr)
                 for(auto & byte_ : arg.data){
                     SEND_DATA_BYTE(byte_);
                 }
                 READ_DATA_BYTE
                 READ_DATA_BYTE
-                auto pass = decltype(copy_scratchpad_coro_)::arg_val_t {{arg.offset, 0}};
-                copy_scratchpad_coro_.Resume(pass);
+                copy_scratchpad_coro_.Resume({{arg.offset, arg.addr}});
                 co_await copy_scratchpad_coro_;
             }
             FinishCoro(this_coro_);
             co_yield {};
         }
     }
-    Task<std::array<unsigned char, 8>, uint8_t> read_memory_coro_ = ReadMemory(read_memory_coro_);
+public:
+    struct Read_Coro_Arg{
+        uint8_t offset{0x20};
+        uint8_t addr{0};
+    };
+    using rscrpd_arg_t = Read_Coro_Arg;
+    using rscrpd_ret_t = std::array<unsigned char, 8>;
+private:
+    Task<rscrpd_ret_t, rscrpd_arg_t> read_memory_coro_ = ReadMemory(read_memory_coro_);
     decltype(read_memory_coro_) ReadMemory(decltype(read_memory_coro_)& this_coro_){
-        decltype(read_memory_coro_)::value_type buff{};
+        decltype(read_memory_coro_)::ret_t buff{};
         while (true){
             RESET_OW_LINE
             if(LINE_RESETED_OK){
                 SEND_OW_CMD(OneW::CMD::SKIP_ROM)
                 SEND_OW_CMD(OneW::CMD::READ_MEMORY)
-                auto offset = this_coro_.GetArgumentValue();
-                SEND_DATA_BYTE(offset)
-                SEND_DATA_BYTE(0)
+                auto arg = this_coro_.GetArgV();
+                SEND_DATA_BYTE(arg.offset)
+                SEND_DATA_BYTE(arg.addr)
                 for(auto& i : buff){
                     READ_DATA_BYTE
-                    i = read_byte_coro_.GetRetVal().value();
+                    i = read_byte_coro_.GetRetOpt().value();
                 }
                 this_coro_.StoreValueAndNotify(buff);
             }
@@ -317,21 +317,25 @@ private:
             co_yield {};
         }
     }
-
-    Task<wscrpd_ret_t, std::array<uint8_t,2>> copy_scratchpad_coro_ = CopyScratchpad(copy_scratchpad_coro_);
+public:
+    struct CopyScrpd_Coro_Arg{
+        uint8_t offset{0x20};
+        uint8_t addr{0};
+        uint8_t es{0x07};
+    };
+private:
+    Task<wscrpd_ret_t, CopyScrpd_Coro_Arg> copy_scratchpad_coro_ = CopyScratchpad(copy_scratchpad_coro_);
     decltype(copy_scratchpad_coro_) CopyScratchpad(decltype(copy_scratchpad_coro_)& this_coro_){
         while (true){
             RESET_OW_LINE
             if(LINE_RESETED_OK){
                 SEND_OW_CMD(OneW::CMD::SKIP_ROM);
                 SEND_OW_CMD(OneW::CMD::COPY_SCRATCHPAD);
-                auto arg = this_coro_.GetArgumentValue();
-                auto offset = arg[0];
-                auto addr = arg[1];
-                SEND_DATA_BYTE(offset);
-                SEND_DATA_BYTE(addr);
-                SEND_DATA_BYTE(0x07);
-                co_await Delay(13000);
+                auto arg = this_coro_.GetArgV();
+                SEND_DATA_BYTE(arg.offset);
+                SEND_DATA_BYTE(arg.addr);
+                SEND_DATA_BYTE(arg.es);
+                co_await Delay(tProg);
                 READ_DATA_BYTE
             }
             FinishCoro(this_coro_);
@@ -343,8 +347,8 @@ private:
     decltype(write_byte_coro_) WriteByte(){
         while (true){
             uint8_t i = 8;
-            if(write_byte_coro_.HasStoredArgument()){
-                uint8_t byte = write_byte_coro_.GetArgumentValue();
+            if(write_byte_coro_.HasStoredArg()){
+                uint8_t byte = write_byte_coro_.GetArgV();
                 while (i--){
                     /* LSB bit is first */
                     write_bit_coro_.Resume(byte & 0x01);
@@ -358,7 +362,6 @@ private:
         }
     }
 
-
     decltype(read_byte_coro_) ReadByte(){
         while (true){
             uint8_t i = 8, byte = 0;
@@ -366,7 +369,7 @@ private:
                 byte >>= 1;
                 read_bit_coro_.Resume();
                 co_await read_bit_coro_;
-                byte |= (read_bit_coro_.GetRetVal().value() << 7);
+                byte |= (read_bit_coro_.GetRetOpt().value() << 7);
                 SWITCH_CONTEXT
             }
             read_byte_coro_.StoreValueAndNotify(byte);
@@ -384,13 +387,13 @@ private:
 
             RESET_OW_LINE
             if (LINE_RESETED_OK) {
-                SEND_OW_CMD(this_coro_.GetArgumentValue())
+                SEND_OW_CMD(this_coro_.GetArgV())
                 do {
                     // read a bit and its complement
                     OW_READ_BIT
-                    id_bit = read_bit_coro_.GetRetVal().value();;
+                    id_bit = read_bit_coro_.GetRetOpt().value();;
                     OW_READ_BIT
-                    cmp_id_bit = read_bit_coro_.GetRetVal().value();;
+                    cmp_id_bit = read_bit_coro_.GetRetOpt().value();;
                     // check for no devices on 1-wire
                     if ((id_bit == 1) && (cmp_id_bit == 1)) {
                         break;
@@ -477,7 +480,7 @@ private:
 
         search_coro_.Resume(OneW::CMD::SEARCH_ROM);
         co_await search_coro_;
-        auto search_result = search_coro_.GetRetVal();
+        auto search_result = search_coro_.GetRetOpt();
         if(search_result){
             // check if same device found
             result = 1;
@@ -548,7 +551,7 @@ private:
 
     decltype(write_bit_coro_) WriteBit(){
         while (true){
-            auto value_to_set = write_bit_coro_.GetArgumentValue();
+            auto value_to_set = write_bit_coro_.GetArgV();
             if (value_to_set) {
                 pin_.setAsOutput();
                 pin_.setValue(PIN_BOARD::LOW);
@@ -621,7 +624,7 @@ private:
 //            ResetSearch();
 //            search_coro_.Resume(OneW::CMD::SEARCH_ROM);
 //            co_await search_coro_;
-//            auto result = search_coro_.GetArgumentValue();
+//            auto result = search_coro_.GetArgV();
 //            co_yield result;
 //        }
 //    }
@@ -630,7 +633,7 @@ private:
 //        while (true){
 //            search_coro_.Resume(OneW::CMD::SEARCH_ROM);
 //            co_await search_coro_;
-//            auto result = search_coro_.GetArgumentValue();
+//            auto result = search_coro_.GetArgV();
 //            co_yield result;
 //        }
 //    }

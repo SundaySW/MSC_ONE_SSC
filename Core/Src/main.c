@@ -23,6 +23,7 @@
 #include "dma.h"
 #include "fdcan.h"
 #include "i2c.h"
+#include "spi.h"
 #include "tim.h"
 #include "gpio.h"
 
@@ -105,6 +106,7 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM8_Init();
   MX_TIM7_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
     initDevice();
 
