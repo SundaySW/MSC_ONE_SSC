@@ -6,6 +6,9 @@
 #include "protos_core/base_param.h"
 #include "HW/IO/pin.hpp"
 
+#define spi_buffer_size     8
+#define ow_eeprom_size      1024
+
 class IAdc
 {
 public:
@@ -15,13 +18,14 @@ public:
 class SpiADC : public IAdc
 {
 public:
+    using buffer_v_t = uint16_t;
     struct CalibData{
         CalibData() = default;
         CalibData(const std::array<uint8_t, 8>& data){
 
         }
-        float c1;
-        float c2;
+        float c1{1};
+        float c2{1};
     };
 
     SpiADC() = delete;
@@ -32,9 +36,13 @@ public:
 
     void Start()
     {
+        src_buf[0] = 0xff;
+        src_buf[1] = 0xff;
+        src_buf[2] = 0xff;
+        src_buf[3] = 0xff;
+
         cs_pin_.setValue(PIN_BOARD::LOW);
-//        HAL_TIM_IC_Start_DMA(htim, tim_channel, (uint32_t*)&capture_result, 1);
-        HAL_SPI_TransmitReceive_DMA(hspi_, (uint8_t*)(src_buf), (uint8_t *)(dst_buf), 128);
+        HAL_SPI_TransmitReceive_DMA(hspi_, (uint8_t*)(src_buf), (uint8_t*)(dst_buf), (spi_buffer_size * sizeof(buffer_v_t)));
     }
 
     void OnCallBack() {
@@ -62,12 +70,18 @@ public:
         return hspi_;
     }
 
+    void PlaceInTable(uint16_t offset, const std::array<uint8_t, 8>& data){
+        for(std::size_t i = offset, x = 0; i < (data.size()/2); i++, x+=2)
+            table_[i] = data[x] + (data[x+1] << 8);
+    }
+
 private:
     SPI_HandleTypeDef* hspi_;
     PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin_;
     CalibData calib_data_;
-    uint16_t src_buf[1024] = {0};
-    uint16_t dst_buf[1024] = {0};
+    buffer_v_t src_buf[spi_buffer_size]{0};
+    buffer_v_t dst_buf[spi_buffer_size]{0};
+    std::array<uint16_t, ow_eeprom_size> table_;
 };
 
 template<typename Func>

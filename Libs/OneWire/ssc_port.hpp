@@ -29,14 +29,20 @@ struct SSCPort{
     }
 
     void CoroTaskReadCalibData(){
-        ow_port_.PlaceTask(OneW_Coro::read_memory, (uint8_t)0x20, [&](void* ret_val_ptr){
-            using d = typename std::array<uint8_t, 8>;
-            auto* ret_val = CastArg(ret_val_ptr, d);
-            if(ret_val->has_value()){
-                auto& v = ret_val->value();
-                adc_.StoreCalibData(v);
-            }
-        });
+        uint16_t ow_page_offset_addr = 0;
+        uint8_t position = 0;
+        for(std::size_t i = 0; i < 32; i++){
+            ow_port_.PlaceTask(OneW_Coro::read_memory, offset, [&, position](void* ret_val_ptr){
+                using d = typename std::array<uint8_t, 8>;
+                auto* ret_val = CastArg(ret_val_ptr, d);
+                if(ret_val->has_value()){
+                    auto& v = ret_val->value();
+                    adc_.PlaceInTable(position, v);
+                }
+            });
+            ow_page_offset_addr += 8;
+            position++;
+        }
     }
 
     void SPIHandler(){

@@ -67,6 +67,7 @@ class Task
 
 public:
     using ret_t = RET_T;
+    using arg_t = ARG_T;
     using promise_type = Promise;
     using ret_val_t = typename Promise::return_val_type;
     using arg_val_t = typename Promise::arg_val_type;
@@ -139,7 +140,7 @@ public:
         return ret_value_;
     }
 
-    ARG_T GetArgV(){
+    ARG_T GetArgValue(){
         if(arg_value_.has_value()){
             auto ret_val = arg_value_.value();
             arg_value_.reset();

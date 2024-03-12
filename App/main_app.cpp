@@ -93,7 +93,7 @@ extern "C"
         if(htim->Instance == TIM1){
             HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
             if(!cnt){
-                cnt = 10;
+                cnt = 5;
                 MscOne::getInstance().Tasks();
             }
             else cnt--;

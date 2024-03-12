@@ -29,7 +29,8 @@
 
 using namespace Protos;
 
-#define CastArg(void_ptr, type)  std::launder(static_cast<std::optional<type>*>(void_ptr))
+//#define CastArg(void_ptr, type)  std::launder(static_cast<std::optional<type>*>(void_ptr))
+#define CastArg(void_ptr, type)  std::launder(static_cast<decltype(type)::ret_val_t *>(void_ptr))
 
 class MscOne : public BaseDevice
 {
@@ -132,7 +133,7 @@ public:
     }
 
     void Tasks(){
-//        CoroTaskWrite();
+        CoroTaskWrite();
         CoroTaskRead();
 //        SearchCoro();
     }
@@ -204,22 +205,28 @@ public:
     }
 
     void CoroTaskWrite(){
-        typename OneWirePort::wscrpd_arg_t arg = {0x20, 0, {7,7,11,7,7,7,7,7}};
-        oneWirePort1.PlaceTask(OneW_Coro::write_memory, arg, [&](void* ret_val_ptr){});
+        decltype(OneWirePort::write_scratchpad_coro_)::arg_t arg = {0x8, 0, {5,5,5,5,5,5,5,5}};
+        oneWirePort1.PlaceTask(OneW_Coro::write_memory, arg, [&](void* ret_val_ptr){
+            uint8_t r =0;
+        });
+        decltype(OneWirePort::write_scratchpad_coro_)::arg_t arg2 = {0x10, 0x8, {4,4,4,4,4,4,4,4}};
+        oneWirePort1.PlaceTask(OneW_Coro::write_memory, arg2, [&](void* ret_val_ptr){
+           uint8_t r = 0;
+        });
     }
 
     void CoroTaskRead(){
-        oneWirePort1.PlaceTask(OneW_Coro::read_memory, (uint8_t)0x20, [&](void* ret_val_ptr){
-            using d = typename std::array<char, 8>;
-            auto* ret_val = CastArg(ret_val_ptr, d);
+        decltype(OneWirePort::read_memory_coro_)::arg_t arg = {0x8, 0};
+        oneWirePort1.PlaceTask(OneW_Coro::read_memory, arg, [&](void* ret_val_ptr){
+            auto* ret_val = CastArg(ret_val_ptr, OneWirePort::read_memory_coro_);
             if(ret_val->has_value()){
                 auto& v = ret_val->value();
                 SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
             }
         });
-        oneWirePort1.PlaceTask(OneW_Coro::read_memory, (uint8_t)0x40, [&](void* ret_val_ptr){
-            using d = std::array<char, 8>;
-            auto* ret_val = CastArg(ret_val_ptr, d);
+        decltype(OneWirePort::read_memory_coro_)::arg_t arg2 = {0x10, 0x8};
+        oneWirePort1.PlaceTask(OneW_Coro::read_memory, arg2, [&](void* ret_val_ptr){
+            auto* ret_val = CastArg(ret_val_ptr, OneWirePort::read_memory_coro_);
             if(ret_val->has_value()){
                 auto& v = ret_val->value();
                 SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());

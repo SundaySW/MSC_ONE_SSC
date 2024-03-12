@@ -43,6 +43,16 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/Libs
         )
 
+#Excluding directory - no compilation
+set (EXCLUDE_DIR "tmp")
+foreach (TMP_PATH ${SOURCES})
+    string (FIND ${TMP_PATH} ${EXCLUDE_DIR} EXCLUDE_DIR_FOUND)
+    if (NOT ${EXCLUDE_DIR_FOUND} EQUAL -1)
+        list (REMOVE_ITEM SOURCES ${TMP_PATH})
+    endif ()
+endforeach(TMP_PATH)
+
+
 target_sources(${PROJECT_NAME}
         PUBLIC
         ${SOURCES}
