@@ -31,7 +31,8 @@ public:
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinReadable, T>::value || std::is_base_of<PinSwitchable, T>::value)
     constexpr inline LOGIC_LEVEL getState(){
-        currentState_ = getValue();
+        if(!debounced)
+            currentState_ = getValue();
         return currentState_;
     }
 
@@ -84,13 +85,22 @@ public:
               position_ = i;
     };
 
+    void refresh_state(){
+        auto now = getValue();
+        if(last_state_ == now)
+            currentState_ = now;
+        last_state_ = now;
+    }
+
 protected:
 private:
+    LOGIC_LEVEL last_state_ = LOW;
     LOGIC_LEVEL currentState_ = LOW;
     GPIO_TypeDef* port_;
     uint16_t pin_;
     uint8_t position_;
     bool inverted_ = false;
+    bool debounced = false;
 
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinReadable, T>::value || std::is_base_of<PinSwitchable, T>::value)

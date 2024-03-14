@@ -13,7 +13,7 @@
 #include "Coro/Event.hpp"
 #include "Coro/Task.hpp"
 
-#include "Coro/task_queue.hpp"
+#include "task_queue.hpp"
 
 #include "main.h"
 
@@ -28,6 +28,8 @@
 #define tPDL                    65
 #define tMSP                    60
 #define tProg                   13000
+
+#define ds2431_mem_size         144
 
 #define storage_size            (8 * sizeof(float))
 //#define max_alignment           alignof(std::max_align_t)
@@ -48,6 +50,12 @@ namespace OneW::CMD {
         READ_SCRATCHPAD				= 0xAA,
         READ_MEMORY				    = 0xF0,
     };
+    enum OwPinConnectionState{
+        connected,
+        new_connection,
+        last_disconnected,
+        no_device
+    };
 }
 
 namespace OneW_Coro{
@@ -55,7 +63,8 @@ namespace OneW_Coro{
         no_type,
         write_memory,
         read_memory,
-        search
+        search,
+        read_memory_full
     };
 
     struct CoroTask{
@@ -68,16 +77,18 @@ namespace OneW_Coro{
             return std::launder( static_cast<T*>( static_cast<void*>(arg_storage_) ) );
         }
         template<typename T>
-        void StoreArgumentValue(T v){
-            new(arg_storage_)(T)(v);
+        void StoreArgumentValue(T&& v){
+            using Tnr = typename std::remove_reference<T>::type;
+            new(arg_storage_)(Tnr)(v);
         }
         template<typename T>
         T* GetRetValPtr(){
             return std::launder( static_cast<T*>( static_cast<void*>(ret_storage_) ) );
         }
         template<typename T>
-        void StoreRetVal(T v){
-            new(ret_storage_)(T)(v);
+        void StoreRetVal(T&& v){
+            using Tnr = typename std::remove_reference<T>::type;
+            new(ret_storage_)(Tnr)(v);
         }
         void CallAwaiter(){
             finished = true;
@@ -136,6 +147,10 @@ public:
             , htim_(htim)
     {}
 
+    void SetTim(TIM_HandleTypeDef* tim){
+        htim_ = tim;
+    }
+
     void TimItHandler(){
         if(in_process){
 //            HAL_TIM_Base_Stop_IT(htim_);
@@ -144,21 +159,25 @@ public:
         }
     }
 
-    bool IsNewConnected(){
-        auto ret = false;
-        if(UpdateState() && !last_state_)
-            ret = true;
-        last_state_ = current_state_;
-        return ret;
+    OneW::CMD::OwPinConnectionState GetPinConnectionState(){
+        if(!in_process){
+            UpdateState();
+            auto retV = OneW::CMD::no_device;
+            if(current_state_ && last_state_)
+                retV = OneW::CMD::connected;
+            else if(current_state_ && !last_state_)
+                retV = OneW::CMD::new_connection;
+            else if(!current_state_ && last_state_)
+                retV = OneW::CMD::last_disconnected;
+            last_state_ = current_state_;
+            return retV;
+        }else
+            return OneW::CMD::connected;
     }
 
     bool UpdateState(){
         current_state_ = pin_.getState();
         return current_state_;
-    }
-
-    void SetTim(TIM_HandleTypeDef* tim){
-        htim_ = tim;
     }
 
     auto Poll(){
@@ -179,6 +198,9 @@ public:
                 break;
             case OneW_Coro::search:
                 coro.coro_ptr = static_cast<void*>(&search_coro_);
+                break;
+            case OneW_Coro::read_memory_full:
+                coro.coro_ptr = static_cast<void*>(&read_full_memory_coro_);
                 break;
             default:
                 break;
@@ -207,6 +229,9 @@ public:
                     break;
                 case OneW_Coro::search:
                     running_task.ResumeCoro<decltype(search_coro_)>();
+                    break;
+                case OneW_Coro::read_memory_full:
+                    running_task.ResumeCoro<decltype(read_full_memory_coro_)>();
                     break;
                 default:
                     break;
@@ -311,6 +336,28 @@ public:
                     i = read_byte_coro_.GetRetOpt().value();
                 }
                 this_coro_.StoreValueAndNotify(buff);
+            }
+            FinishCoro(this_coro_);
+            co_yield {};
+        }
+    }
+
+    Task<uint8_t, char*> read_full_memory_coro_ = ReadFullMemory(read_full_memory_coro_);
+    decltype(read_full_memory_coro_) ReadFullMemory(decltype(read_full_memory_coro_)& this_coro_){
+        while (true){
+            RESET_OW_LINE
+            if(LINE_RESETED_OK){
+                SEND_OW_CMD(OneW::CMD::SKIP_ROM)
+                SEND_OW_CMD(OneW::CMD::READ_MEMORY)
+                auto* arg = this_coro_.GetArgValue();
+                SEND_DATA_BYTE(0)
+                SEND_DATA_BYTE(0)
+                for(std::size_t i = 0; i < ds2431_mem_size; i++){
+                    READ_DATA_BYTE
+                    arg[i] = read_byte_coro_.GetRetOpt().value();
+                    int c = 0;
+                }
+                int c = 0;
             }
             FinishCoro(this_coro_);
             co_yield {};

@@ -1,9 +1,11 @@
 #pragma once
 
 #include "stm32g4xx_hal.h"
+#include "tim.h"
+
 #include <cstring>
 #include <functional>
-#include "optional"
+#include <optional>
 #include <array>
 
 #include "protos_core/protos_msg.h"
@@ -22,7 +24,11 @@
 #include "1Wire/onewire_device_pool.h"
 #include "1Wire/onewire_ds2482.h"
 #include "1Wire/onewire_task_provider.h"
+
 #include "OneWire/one_wire.hpp"
+#include "ssc_port/ssc_port.hpp"
+#include "ssc_port/spi_adc.hpp"
+#include "ssc_port/ssc_port_param.hpp"
 
 #define EEPROM_I2C_ADDR 0x50
 #define DS2482_I2C_ADDR 0x18
@@ -40,26 +46,27 @@ public:
     MscOne() = delete;
     MscOne(MscOne&) = delete;
     MscOne(MscOne&&) = delete;
+    MscOne& operator = (MscOne &) = delete;
     MscOne& operator = (MscOne const &) = delete;
 
-    static MscOne& getInstance(){
+    static MscOne& global(){
         static auto self = MscOne(DeviceUID::TYPE_MICROCHIP, 0x01, 0x20, &hfdcan1);
         return self;
     }
 
     void MicroTimHandler(){
-        oneWirePort1.TimItHandler();
+        ssc_port_.ow_port_.TimItHandler();
     }
 
     void Spi1Handler(){
-
+        ssc_port_.SPIHandler();
     }
 
     void PollCoroPort(){
 //        if(oneWirePort1.IsNewConnected()){
 //            CoroTaskRead();
 //        }
-        oneWirePort1.Poll();
+        ssc_port_.ow_port_.Poll();
     }
 
     void initPerf(ADC_HandleTypeDef *adc1,
@@ -68,22 +75,24 @@ public:
                   DAC_HandleTypeDef *dac1,
                   TIM_HandleTypeDef* timHall0,
                   TIM_HandleTypeDef* timHall1,
-                  TIM_HandleTypeDef* delay_tim)
+                  TIM_HandleTypeDef* ssc1_ow_tim,
+                  SPI_HandleTypeDef* ssc1_spi)
     {
-        oneWirePort1.SetTim(delay_tim);
         I2CMaster = I2C(i2c2);
         AdcA1 = std::move(ADCc3(adc1));
         AdcA2 = std::move(ADCc2(adc2));
         TimIC0 = std::move(Tim_ICMode(timHall0, TIM_CHANNEL_1));
         TimIC1 = std::move(Tim_ICMode(timHall1, TIM_CHANNEL_1));
-
         Valve0Ctrl = std::move(DacParam(dac1, DAC_CHANNEL_1));
+        Valve1Ctrl = std::move(DacParam(dac1, DAC_CHANNEL_2));
+        ssc_port_.InitPerf(ssc1_spi, ssc1_ow_tim);
+        sscPortParam1.SetADC(ssc_port_.GetADC());
+
         Valve0Ctrl.SetId(0xC1);
         Valve0Ctrl.SetCtrlRate(500);
         Valve0Ctrl.SetSendRate(0);
         Valve0Ctrl.SetShort(0);
 
-        Valve1Ctrl = std::move(DacParam(dac1, DAC_CHANNEL_2));
         Valve1Ctrl.SetId(0xC2);
         Valve1Ctrl.SetCtrlRate(500);
         Valve1Ctrl.SetSendRate(0);
@@ -117,6 +126,8 @@ public:
         hallSensor1.SetId(0x42);
         hallSensor1.SetUpdateRate(1000);
         hallSensor1.SetSendRate(2000);
+
+        sscPortParam1.SetId(0xB1);
     }
 
 	void Start()
@@ -129,13 +140,12 @@ public:
         TimIC1.Start();
 		Valve0Ctrl.Start();
 		Valve1Ctrl.Start();
+        ssc_port_.Start();
 //        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
     }
 
-    void Tasks(){
-        CoroTaskWrite();
-        CoroTaskRead();
-//        SearchCoro();
+    void UpdateSScPort(){
+        ssc_port_.Update();
     }
 
     static void saveCalibParamToEEPROM(char ID, float* data){
@@ -197,42 +207,45 @@ public:
                 break;
         }
     };
-
-    void SearchCoro(){
-        oneWirePort1.PlaceTask(OneW_Coro::search, 0xF0, [&](void* ret_val_ptr){
-            int c = 0;
-        });
-    }
-
-    void CoroTaskWrite(){
-        decltype(OneWirePort::write_scratchpad_coro_)::arg_t arg = {0x8, 0, {5,5,5,5,5,5,5,5}};
-        oneWirePort1.PlaceTask(OneW_Coro::write_memory, arg, [&](void* ret_val_ptr){
-            uint8_t r =0;
-        });
-        decltype(OneWirePort::write_scratchpad_coro_)::arg_t arg2 = {0x10, 0x8, {4,4,4,4,4,4,4,4}};
-        oneWirePort1.PlaceTask(OneW_Coro::write_memory, arg2, [&](void* ret_val_ptr){
-           uint8_t r = 0;
-        });
-    }
-
-    void CoroTaskRead(){
-        decltype(OneWirePort::read_memory_coro_)::arg_t arg = {0x8, 0};
-        oneWirePort1.PlaceTask(OneW_Coro::read_memory, arg, [&](void* ret_val_ptr){
-            auto* ret_val = CastArg(ret_val_ptr, OneWirePort::read_memory_coro_);
-            if(ret_val->has_value()){
-                auto& v = ret_val->value();
-                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
-            }
-        });
-        decltype(OneWirePort::read_memory_coro_)::arg_t arg2 = {0x10, 0x8};
-        oneWirePort1.PlaceTask(OneW_Coro::read_memory, arg2, [&](void* ret_val_ptr){
-            auto* ret_val = CastArg(ret_val_ptr, OneWirePort::read_memory_coro_);
-            if(ret_val->has_value()){
-                auto& v = ret_val->value();
-                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
-            }
-        });
-    }
+//    char buff[144];
+//    char* buff_ptr = buff;
+//    void ReadFullMem(){
+//        oneWirePort1.PlaceTask(OneW_Coro::read_memory_full, buff_ptr, [&](void* ret_val_ptr){
+//            for(std::size_t i = 0; i < 144; i+=8){
+//                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &buff[i], 8);
+//            }
+//        });
+//    }
+//
+//    void CoroTaskWrite(){
+//        decltype(OneWirePort::write_scratchpad_coro_)::arg_t arg = {0x8, 0, {5,5,5,5,5,5,5,5}};
+//        oneWirePort1.PlaceTask(OneW_Coro::write_memory, arg, [&](void* ret_val_ptr){
+//            uint8_t r =0;
+//        });
+//        decltype(OneWirePort::write_scratchpad_coro_)::arg_t arg2 = {0x10, 0x8, {4,4,4,4,4,4,4,4}};
+//        oneWirePort1.PlaceTask(OneW_Coro::write_memory, arg2, [&](void* ret_val_ptr){
+//           uint8_t r = 0;
+//        });
+//    }
+//
+//    void CoroTaskRead(){
+//        decltype(OneWirePort::read_memory_coro_)::arg_t arg = {0x8, 0};
+//        oneWirePort1.PlaceTask(OneW_Coro::read_memory, arg, [&](void* ret_val_ptr){
+//            auto* ret_val = CastArg(ret_val_ptr, OneWirePort::read_memory_coro_);
+//            if(ret_val->has_value()){
+//                auto& v = ret_val->value();
+//                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
+//            }
+//        });
+//        decltype(OneWirePort::read_memory_coro_)::arg_t arg2 = {0x10, 0x8};
+//        oneWirePort1.PlaceTask(OneW_Coro::read_memory, arg2, [&](void* ret_val_ptr){
+//            auto* ret_val = CastArg(ret_val_ptr, OneWirePort::read_memory_coro_);
+//            if(ret_val->has_value()){
+//                auto& v = ret_val->value();
+//                SendProtosMsg(0xFF, MSGTYPE_CMDMISC, &v[0], v.size());
+//            }
+//        });
+//    }
 
 	void OnPoll() override {
 //        for (auto* param : Params)
@@ -264,12 +277,11 @@ private:
     MscOne(DeviceUID::TYPE uidType, uint8_t family, uint8_t addr, FDCAN_HandleTypeDef* can)
             : BaseDevice(uidType, family, addr, can)
             , eeprom(&I2CMaster, EEPROM_I2C_ADDR)
-            , oneWirePort1(PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID0_GPIO_Port, ID0_Pin))
-    {
+    {}
 
-    }
-
-    OneWirePort oneWirePort1;
+    SSCPort ssc_port_{PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(SS0_GPIO_Port, SS0_Pin),
+                      PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID0_GPIO_Port, ID0_Pin),
+                      sscPortParam1};
     I2C I2CMaster;
     inline static ADCc3 AdcA1;
     inline static ADCc2 AdcA2;
@@ -284,19 +296,20 @@ private:
     inline static Tim_ICmParam hallSensor1{&TimIC1, &saveCalibParamToEEPROM};
     inline static DacParam Valve0Ctrl;
     inline static DacParam Valve1Ctrl;
+    inline static SSCPortParam sscPortParam1{&saveCalibParamToEEPROM};
     inline static constexpr int PARAM_CNT = 9;
     inline static constexpr auto Params{[]() constexpr{
         std::array<BaseParam*, PARAM_CNT> result{};
         int pCount = PARAM_CNT-1;
-        result[pCount--] = (BaseParam*)&Valve0Ctrl;
-        result[pCount--] = (BaseParam*)&Valve1Ctrl;
-        result[pCount--] = (BaseParam*)&Preasure1;
-        result[pCount--] = (BaseParam*)&Preasure2;
-        result[pCount--] = (BaseParam*)&Preasure3;
-        result[pCount--] = (BaseParam*)&Preasure4;
-        result[pCount--] = (BaseParam*)&Preasure5;
-        result[pCount--] = (BaseParam*)&hallSensor0;
-        result[pCount]   = (BaseParam*)&hallSensor1;
+        result[pCount--] = static_cast<BaseParam*>(&Valve0Ctrl);
+        result[pCount--] = static_cast<BaseParam*>(&Valve1Ctrl);
+        result[pCount--] = static_cast<BaseParam*>(&Preasure1);
+        result[pCount--] = static_cast<BaseParam*>(&Preasure2);
+        result[pCount--] = static_cast<BaseParam*>(&Preasure3);
+        result[pCount--] = static_cast<BaseParam*>(&Preasure4);
+        result[pCount--] = static_cast<BaseParam*>(&Preasure5);
+        result[pCount--] = static_cast<BaseParam*>(&hallSensor0);
+        result[pCount]   = static_cast<BaseParam*>(&hallSensor1);
         return result;
     }()};
     Eeprom24AAUID eeprom;
@@ -304,12 +317,12 @@ private:
 
 void SendMsg(char dest, char msgType, const char *data, char dlc)
 {
-    MscOne::getInstance().SendProtosMsg(dest, msgType, data, dlc);
+    MscOne::global().SendProtosMsg(dest, msgType, data, dlc);
 }
 void SendMsg(char dest, char msgType, char data0, char data1)
 {
     char buf[8];
     buf[0] = data0;
     buf[1] = data1;
-    MscOne::getInstance().SendProtosMsg(dest, msgType, buf, 2);
+    MscOne::global().SendProtosMsg(dest, msgType, buf, 2);
 }

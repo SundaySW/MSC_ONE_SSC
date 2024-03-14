@@ -7,6 +7,7 @@
 #include "stm32g4xx_hal.h"
 #include "MscOne.hpp"
 #include "tim.h"
+#include "../Libs/HW/Timer/tim_scheduler.hpp"
 
 //void* operator new(std::size_t n) {
 //    return malloc(n);
@@ -21,6 +22,7 @@ extern "C"
         __HAL_TIM_CLEAR_IT(&htim2, TIM_IT_UPDATE); // pww capture_c1-2
         __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE); // pwm gen_c4
         __HAL_TIM_CLEAR_IT(&htim4, TIM_IT_UPDATE); // pww capture_c1-2
+        __HAL_TIM_CLEAR_IT(&htim6, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim8, TIM_IT_UPDATE); // pwm gen_c1
         __HAL_TIM_CLEAR_IT(&htim15, TIM_IT_UPDATE); // pwm gen_c2
@@ -33,74 +35,74 @@ extern "C"
         if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
             Error_Handler();
         TIM_IT_clear_();
-        MscOne::getInstance().initPerf(&hadc1, &hadc2, &hi2c2, &hdac1, &htim2, &htim4, &htim7);
-        MscOne::getInstance().Start();
+        MscOne::global().initPerf(&hadc1, &hadc2, &hi2c2, &hdac1, &htim2, &htim4, &htim7, &hspi1);
+        MscOne::global().Start();
+        TimersPool::global().SetTim(&htim6);
         HAL_TIM_Base_Start_IT(&htim1);
 //        HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_1);
     }
 
     void device_main_loop()
     {
-        MscOne::getInstance().Poll();
+        MscOne::global().Poll();
+        TimersPool::global().Poll();
     }
 
     void OnSysTickTimer()
     {
-        MscOne::getInstance().OnTimerINT(1);
+        MscOne::global().OnTimerINT(1);
     }
 
     void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c)
     {
         if (hi2c == &hi2c2)
-            MscOne::getInstance().getI2CMaster().WriteHandler();
+            MscOne::global().getI2CMaster().WriteHandler();
     }
     void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c)
     {
         if (hi2c == &hi2c2)
-            MscOne::getInstance().getI2CMaster().ReadHandler();
+            MscOne::global().getI2CMaster().ReadHandler();
     }
 
     void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
     {
         if (hi2c == & hi2c2)
-            MscOne::getInstance().getI2CMaster().ErrorHandler();
+            MscOne::global().getI2CMaster().ErrorHandler();
     }
 
     void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c)
     {
         if (hi2c == &hi2c2)
-            MscOne::getInstance().getI2CMaster().ReadHandler();
+            MscOne::global().getI2CMaster().ReadHandler();
     }
 
     void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
     {
         if (hi2c == &hi2c2)
-            MscOne::getInstance().getI2CMaster().WriteHandler();
+            MscOne::global().getI2CMaster().WriteHandler();
     }
 
     void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
     {
-        MscOne::getInstance().processADCCallback(hadc);
+        MscOne::global().processADCCallback(hadc);
     }
 
     void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
     {
-        MscOne::getInstance().processTimCallBack(htim);
+        MscOne::global().processTimCallBack(htim);
     }
-    uint8_t cnt = 3;
+
     void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM1){
             HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-            if(!cnt){
-                cnt = 5;
-                MscOne::getInstance().Tasks();
-            }
-            else cnt--;
-            MscOne::getInstance().PollCoroPort();
+            MscOne::global().UpdateSScPort();
         }
-        if(htim->Instance == TIM7){
-            MscOne::getInstance().MicroTimHandler();
+        else if(htim->Instance == TIM7){
+            MscOne::global().MicroTimHandler();
+        }
+        else if(htim->Instance == TIM6){
+            TimersPool::global().OnTimTick();
         }
     }
 
@@ -108,7 +110,7 @@ extern "C"
     {
         if(hspi == &hspi1)
         {
-            MscOne::getInstance().Spi1Handler();
+            MscOne::global().Spi1Handler();
         }
     }
 
@@ -121,7 +123,7 @@ extern "C"
             /* Retrieve Rx messages from RX FIFO0 */
             if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK)
                 Error_Handler();
-            MscOne::getInstance().Port.OnRX(RxHeader, RxData);
+            MscOne::global().Port.OnRX(RxHeader, RxData);
         }
     }
 }
