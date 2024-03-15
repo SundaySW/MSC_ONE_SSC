@@ -7,7 +7,8 @@
 #include "stm32g4xx_hal.h"
 #include "MscOne.hpp"
 #include "tim.h"
-#include "../Libs/HW/Timer/tim_scheduler.hpp"
+
+#include <async_tim_tasks.hpp>
 
 //void* operator new(std::size_t n) {
 //    return malloc(n);
@@ -22,7 +23,6 @@ extern "C"
         __HAL_TIM_CLEAR_IT(&htim2, TIM_IT_UPDATE); // pww capture_c1-2
         __HAL_TIM_CLEAR_IT(&htim3, TIM_IT_UPDATE); // pwm gen_c4
         __HAL_TIM_CLEAR_IT(&htim4, TIM_IT_UPDATE); // pww capture_c1-2
-        __HAL_TIM_CLEAR_IT(&htim6, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
         __HAL_TIM_CLEAR_IT(&htim8, TIM_IT_UPDATE); // pwm gen_c1
         __HAL_TIM_CLEAR_IT(&htim15, TIM_IT_UPDATE); // pwm gen_c2
@@ -37,7 +37,6 @@ extern "C"
         TIM_IT_clear_();
         MscOne::global().initPerf(&hadc1, &hadc2, &hi2c2, &hdac1, &htim2, &htim4, &htim7, &hspi1);
         MscOne::global().Start();
-        TimersPool::global().SetTim(&htim6);
         HAL_TIM_Base_Start_IT(&htim1);
 //        HAL_TIM_PWM_Start_IT(&htim4, TIM_CHANNEL_1);
     }
@@ -45,7 +44,7 @@ extern "C"
     void device_main_loop()
     {
         MscOne::global().Poll();
-        TimersPool::global().Poll();
+        TASK_POOL_POLL();
     }
 
     void OnSysTickTimer()
@@ -95,14 +94,10 @@ extern "C"
     void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM1){
-            HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-            MscOne::global().UpdateSScPort();
+            TASK_POOL_ON_TIM();
         }
         else if(htim->Instance == TIM7){
             MscOne::global().MicroTimHandler();
-        }
-        else if(htim->Instance == TIM6){
-            TimersPool::global().OnTimTick();
         }
     }
 

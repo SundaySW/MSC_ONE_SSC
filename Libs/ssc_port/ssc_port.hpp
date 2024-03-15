@@ -2,6 +2,8 @@
 #include "OneWire/one_wire.hpp"
 #include "spi_adc.hpp"
 #include "ssc_port_param.hpp"
+#include "HW/IO/input_signal.hpp"
+#include "async_tim_tasks.hpp"
 
 #define param_default_send_rate     (2000)
 #define param_default_update_rate   (1000)
@@ -14,11 +16,18 @@ struct SSCPort{
         : ow_port_(ow_pin)
         , adc_(cs_pin)
         , param_(param)
+        , connection_pin_(ow_pin.getPort(), ow_pin.getPin(), 100)
     {}
 
-    void InitPerf(SPI_HandleTypeDef* spi, TIM_HandleTypeDef* ow_tim){
+    void Init(SPI_HandleTypeDef* spi, TIM_HandleTypeDef* ow_tim){
         ow_port_.SetTim(ow_tim);
         adc_.SetSPI(spi);
+        PLACE_ASYNC_TASK([&]
+        {
+            if(!ow_port_.IsInProcess())
+                connection_pin_.Update();
+
+        }, 10);
     }
 
     SpiADC* GetADC(){
@@ -26,19 +35,21 @@ struct SSCPort{
     }
 
     void Update(){
-        switch (ow_port_.GetPinConnectionState()) {
-            case OneW::CMD::new_connection:
-                CoroTaskReadCalibData();
-                break;
-            case OneW::CMD::last_disconnected:
-                DisableParam();
-                break;
-            case OneW::CMD::connected:
-            case OneW::CMD::no_device:
-            default:
-                break;
+        if(!ow_port_.IsInProcess()){
+            switch (connection_pin_.GetPinConnectionState()) {
+                case InputSignal::new_connection:
+                    CoroTaskReadCalibData();
+                    break;
+                case InputSignal::last_disconnected:
+                    DisableParam();
+                    break;
+                case InputSignal::connected:
+                case InputSignal::no_device:
+                default:
+                    break;
+            }
+            ow_port_.Poll();
         }
-        ow_port_.Poll();
     }
 
     void CoroTaskReadCalibData(){
@@ -71,6 +82,7 @@ struct SSCPort{
     SSCPortParam& param_;
     OneWirePort ow_port_;
     SpiADC adc_;
+    InputSignal connection_pin_;
     unsigned short param_send_rate_ = param_default_send_rate;
     unsigned short param_update_rate_ = param_default_update_rate;
 };

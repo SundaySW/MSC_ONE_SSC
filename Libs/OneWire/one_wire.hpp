@@ -50,12 +50,6 @@ namespace OneW::CMD {
         READ_SCRATCHPAD				= 0xAA,
         READ_MEMORY				    = 0xF0,
     };
-    enum OwPinConnectionState{
-        connected,
-        new_connection,
-        last_disconnected,
-        no_device
-    };
 }
 
 namespace OneW_Coro{
@@ -153,36 +147,18 @@ public:
 
     void TimItHandler(){
         if(in_process){
-//            HAL_TIM_Base_Stop_IT(htim_);
             htim_->State = HAL_TIM_STATE_READY;
             timer_ev_.Notify();
         }
     }
 
-    OneW::CMD::OwPinConnectionState GetPinConnectionState(){
-        if(!in_process){
-            UpdateState();
-            auto retV = OneW::CMD::no_device;
-            if(current_state_ && last_state_)
-                retV = OneW::CMD::connected;
-            else if(current_state_ && !last_state_)
-                retV = OneW::CMD::new_connection;
-            else if(!current_state_ && last_state_)
-                retV = OneW::CMD::last_disconnected;
-            last_state_ = current_state_;
-            return retV;
-        }else
-            return OneW::CMD::connected;
-    }
-
-    bool UpdateState(){
-        current_state_ = pin_.getState();
-        return current_state_;
-    }
-
     auto Poll(){
         if(!in_process)
             RunCoro();
+    }
+
+    bool IsInProcess() const{
+        return in_process;
     }
 
     template<typename ArgT>
@@ -262,7 +238,6 @@ public:
 
 private:
     using Future_uint = Task<unsigned char>;
-
     Future_uint write_bit_coro_ = WriteBit();
     Future_uint read_bit_coro_ = ReadBit();
     Future_uint write_byte_coro_ = WriteByte();
@@ -276,8 +251,6 @@ private:
     CoroTask running_task {};
 
     PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> pin_;
-    bool last_state_ = false;
-    bool current_state_ = false;
     Event timer_ev_;
     TIM_HandleTypeDef* htim_;
 
@@ -355,9 +328,7 @@ public:
                 for(std::size_t i = 0; i < ds2431_mem_size; i++){
                     READ_DATA_BYTE
                     arg[i] = read_byte_coro_.GetRetOpt().value();
-                    int c = 0;
                 }
-                int c = 0;
             }
             FinishCoro(this_coro_);
             co_yield {};
@@ -574,7 +545,7 @@ private:
         if(htim_){
             __HAL_TIM_SET_AUTORELOAD(htim_, micros);
 //            __HAL_TIM_SET_AUTORELOAD(htim_, __HAL_TIM_CALC_PERIOD(160000000, 0xFFFF, micros));
-            HAL_TIM_Base_Start_IT(htim_);
+            HAL_TIM_Base_Start_IT(htim_); //one shot!!!!
         }
         return timer_ev_;
     }

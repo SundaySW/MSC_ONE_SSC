@@ -1,15 +1,38 @@
-
 #pragma once
 
 #include "pin.hpp"
 
-class InputSignal{
-public:
+struct InputSignal{
+    enum PinConnectionState{
+        connected,
+        new_connection,
+        last_disconnected,
+        no_device
+    };
     constexpr explicit InputSignal(GPIO_TypeDef* port, uint16_t pin, uint32_t debounce_time) noexcept
         : pin_(port, pin),
         debounce_time_(debounce_time)
     {
         SetState(pin_.getState());
+    }
+
+    constexpr explicit InputSignal(PIN_BOARD::PIN<PIN_BOARD::PinReadable> pin, uint32_t debounce_time) noexcept
+        : pin_(pin)
+        , debounce_time_(debounce_time)
+    {
+        SetState(pin_.getState());
+    }
+
+    PinConnectionState GetPinConnectionState(){
+        auto retV = no_device;
+        if(signal_state_ && last_pin_connection_state_)
+            retV = connected;
+        else if(signal_state_ && !last_pin_connection_state_)
+            retV = new_connection;
+        else if(!signal_state_ && last_pin_connection_state_)
+            retV = last_disconnected;
+        last_pin_connection_state_ = signal_state_;
+        return retV;
     }
 
     constexpr void Update() {
@@ -36,14 +59,12 @@ public:
     [[nodiscard]] constexpr PIN_BOARD::LOGIC_LEVEL getState() const {
         return signal_state_;
     }
-
-protected:
-    PIN_BOARD::PIN<PIN_BOARD::PinReadable> pin_;
-
 private:
+    PIN_BOARD::PIN<PIN_BOARD::PinReadable> pin_;
     PIN_BOARD::LOGIC_LEVEL signal_state_;
     uint32_t debounce_time_;
     uint32_t active_time_{0};
+    bool last_pin_connection_state_{false};
 
     constexpr void SetState(PIN_BOARD::LOGIC_LEVEL level){
         signal_state_ = level;

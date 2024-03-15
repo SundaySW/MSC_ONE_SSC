@@ -1,6 +1,4 @@
-
-#ifndef SND_STM32_PIN_HPP
-#define SND_STM32_PIN_HPP
+#pragma once
 
 #include <cstdint>
 #include "type_traits"
@@ -13,32 +11,25 @@ enum LOGIC_LEVEL{
     HIGH = 1,
 };
 
-struct PinReadable
-{
-};
+struct PinReadable {};
 
-struct PinWriteable
-{
-};
+struct PinWriteable {};
 
-struct PinSwitchable
-{
-};
+struct PinSwitchable {};
 
 template<typename InterfaceType>
 class PIN{
 public:
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinReadable, T>::value || std::is_base_of<PinSwitchable, T>::value)
-    constexpr inline LOGIC_LEVEL getState(){
-        if(!debounced)
-            currentState_ = getValue();
+    constexpr LOGIC_LEVEL getState(){
+        currentState_ = getValue();
         return currentState_;
     }
 
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinWriteable, T>::value || std::is_base_of<PinSwitchable, T>::value)
-    constexpr inline void setValue(LOGIC_LEVEL value){
+    constexpr void setValue(LOGIC_LEVEL value){
         if(inverted_){
             if (value) port_->BRR = (uint32_t)pin_;
             else port_->BSRR = (uint32_t)pin_;
@@ -51,7 +42,7 @@ public:
 
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinWriteable, T>::value || std::is_base_of<PinSwitchable, T>::value)
-    constexpr inline void togglePinState(){
+    constexpr void togglePinState(){
         uint32_t odr = port_->ODR;
         port_->BSRR = ((odr & pin_) << 16U) | (~odr & pin_);
     }
@@ -60,6 +51,9 @@ public:
         inverted_ = true;
     }
 
+    [[nodiscard]] constexpr inline GPIO_TypeDef* getPort() const{
+        return port_;
+    }
     [[nodiscard]] constexpr inline uint16_t getPin() const{
         return pin_;
     }
@@ -85,26 +79,17 @@ public:
               position_ = i;
     };
 
-    void refresh_state(){
-        auto now = getValue();
-        if(last_state_ == now)
-            currentState_ = now;
-        last_state_ = now;
-    }
-
 protected:
 private:
-    LOGIC_LEVEL last_state_ = LOW;
     LOGIC_LEVEL currentState_ = LOW;
     GPIO_TypeDef* port_;
     uint16_t pin_;
     uint8_t position_;
     bool inverted_ = false;
-    bool debounced = false;
 
     template<typename T = InterfaceType>
     requires(std::is_base_of<PinReadable, T>::value || std::is_base_of<PinSwitchable, T>::value)
-    constexpr inline LOGIC_LEVEL getValue(){
+    constexpr LOGIC_LEVEL getValue(){
         LOGIC_LEVEL retVal;
         if((port_->IDR & pin_) != (uint32_t)LOGIC_LEVEL::LOW)
             retVal = LOGIC_LEVEL::HIGH;
@@ -118,5 +103,3 @@ private:
 };
 
 } // namespace PIN_BOARD
-
-#endif //SND_STM32_PIN_HPP

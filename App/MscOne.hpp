@@ -30,6 +30,8 @@
 #include "ssc_port/spi_adc.hpp"
 #include "ssc_port/ssc_port_param.hpp"
 
+#include <async_tim_tasks.hpp>
+
 #define EEPROM_I2C_ADDR 0x50
 #define DS2482_I2C_ADDR 0x18
 
@@ -85,7 +87,7 @@ public:
         TimIC1 = std::move(Tim_ICMode(timHall1, TIM_CHANNEL_1));
         Valve0Ctrl = std::move(DacParam(dac1, DAC_CHANNEL_1));
         Valve1Ctrl = std::move(DacParam(dac1, DAC_CHANNEL_2));
-        ssc_port_.InitPerf(ssc1_spi, ssc1_ow_tim);
+        ssc_port_.Init(ssc1_spi, ssc1_ow_tim);
         sscPortParam1.SetADC(ssc_port_.GetADC());
 
         Valve0Ctrl.SetId(0xC1);
@@ -141,11 +143,9 @@ public:
 		Valve0Ctrl.Start();
 		Valve1Ctrl.Start();
         ssc_port_.Start();
+        PLACE_ASYNC_TASK([&]{ HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin); }, 10000);
+        PLACE_ASYNC_TASK([&]{ ssc_port_.Update(); }, 10000);
 //        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
-    }
-
-    void UpdateSScPort(){
-        ssc_port_.Update();
     }
 
     static void saveCalibParamToEEPROM(char ID, float* data){
