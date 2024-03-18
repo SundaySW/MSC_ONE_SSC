@@ -25,7 +25,7 @@ public:
         : handler_(std::move(handler))
         , interval_(delay)
     {
-        StartTimer();
+        Enable();
     }
 
     void TickHandle(){

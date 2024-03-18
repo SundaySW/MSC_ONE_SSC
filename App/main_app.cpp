@@ -93,20 +93,22 @@ extern "C"
 
     void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
-        if(htim->Instance == TIM1){
+        if(htim->Instance == TIM1)
             TASK_POOL_ON_TIM();
-        }
-        else if(htim->Instance == TIM7){
+
+        else if(htim->Instance == TIM7)
             MscOne::global().MicroTimHandler();
-        }
+
     }
 
-    void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
-    {
+    void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
         if(hspi == &hspi1)
-        {
-            MscOne::global().Spi1Handler();
-        }
+            MscOne::global().Spi1TxHandler();
+    }
+
+    void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
+        if(hspi == &hspi1)
+            MscOne::global().Spi1RxHandler();
     }
 
     FDCAN_RxHeaderTypeDef RxHeader;

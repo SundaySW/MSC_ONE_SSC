@@ -58,10 +58,6 @@ struct SSCPort{
         });
     }
 
-    void SPIHandler(){
-        adc_.OnCallBack();
-    }
-
     void Start(){
         adc_.Start();
     }

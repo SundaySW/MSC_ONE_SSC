@@ -6,23 +6,20 @@
 #include "protos_core/base_param.h"
 #include "HW/IO/pin.hpp"
 
+#include "ad7792.hpp"
+
+#include "ad7792_specs.hpp"
+
 #define spi_buffer_size     8
 #define ow_eeprom_size      144
+
+using namespace AD7792_adc;
 
 class SpiADC
 {
 public:
     using buffer_v_t = uint16_t;
-    struct CalibData{
-        CalibData() = default;
-        CalibData(const std::array<uint8_t, 8>& data){
 
-        }
-        float c1{1};
-        float c2{1};
-    };
-
-    SpiADC() = default;
     SpiADC(PIN_BOARD::PIN<PIN_BOARD::PinWriteable> _ss_pin)
         : cs_pin_(_ss_pin)
     {}
@@ -33,28 +30,20 @@ public:
 
     void Start()
     {
-        src_buf[0] = 0xff;
-        src_buf[1] = 0xff;
-        src_buf[2] = 0xff;
-        src_buf[3] = 0xff;
-
-        cs_pin_.setValue(PIN_BOARD::LOW);
-        HAL_SPI_TransmitReceive_DMA(hspi_, (uint8_t*)(src_buf), (uint8_t*)(dst_buf), (spi_buffer_size * sizeof(buffer_v_t)));
+        ad7792.Init(RTD_2currentSources, current_210uA, fADC_16_7Hz, gain_1, external, AIN1);
     }
 
-    void OnCallBack() {
-        cs_pin_.setValue(PIN_BOARD::HIGH);
+    void RxCallBack() {
+//        cs_pin_.setValue(PIN_BOARD::HIGH);
+    }
+    void TxCallBack() {
+//        cs_pin_.setValue(PIN_BOARD::HIGH);
     }
 
     float CalcValue()
     {
         float v = 1;
-        auto res = (v * calib_data_.c1) + calib_data_.c2;
-        return res;
-    }
-
-    void StoreCalibData(CalibData data){
-        calib_data_ = std::move(data);
+        return v;
     }
 
     bool GetValue(float& value)
@@ -63,16 +52,11 @@ public:
         return true;
     }
 
-    SPI_HandleTypeDef * getHSpi(){
+    SPI_HandleTypeDef * getSpiHandler(){
         return hspi_;
     }
 
-    void RecalcCalibration(){
-
-    }
-
     void Enable(){
-        RecalcCalibration();
     }
 
     void Disable(){
@@ -85,9 +69,15 @@ public:
 private:
     SPI_HandleTypeDef* hspi_;
     PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin_;
-    CalibData calib_data_;
 
     buffer_v_t src_buf[spi_buffer_size]{0};
     buffer_v_t dst_buf[spi_buffer_size]{0};
     std::array<char, ow_eeprom_size> table_;
+
+    AD7792_adc::AD7792 ad7792{
+        [&](uint8_t* ptr, uint8_t size){
+            cs_pin_.setValue(PIN_BOARD::LOW);
+            HAL_SPI_Transmit_DMA(hspi_, ptr, size);
+        }
+    };
 };

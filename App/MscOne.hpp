@@ -60,8 +60,11 @@ public:
         ssc_port_.ow_port_.TimItHandler();
     }
 
-    void Spi1Handler(){
-        ssc_port_.SPIHandler();
+    void Spi1RxHandler(){
+        ssc_port_.adc_.RxCallBack();
+    }
+    void Spi1TxHandler(){
+        ssc_port_.adc_.TxCallBack();
     }
 
     void PollCoroPort(){
