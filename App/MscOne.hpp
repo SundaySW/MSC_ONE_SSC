@@ -57,21 +57,21 @@ public:
     }
 
     void MicroTimHandler(){
-        ssc_port_.ow_port_.TimItHandler();
+        ssc_port_.GetOWPort().TimItHandler();
     }
 
     void Spi1RxHandler(){
-        ssc_port_.adc_.RxCallBack();
+        ssc_port_.GetADC()->RxCallBack();
     }
     void Spi1TxHandler(){
-        ssc_port_.adc_.TxCallBack();
+        ssc_port_.GetADC()->TxCallBack();
     }
 
     void PollCoroPort(){
 //        if(oneWirePort1.IsNewConnected()){
 //            CoroTaskRead();
 //        }
-        ssc_port_.ow_port_.Poll();
+        ssc_port_.GetOWPort().Poll();
     }
 
     void initPerf(ADC_HandleTypeDef *adc1,
@@ -146,8 +146,9 @@ public:
 		Valve0Ctrl.Start();
 		Valve1Ctrl.Start();
         ssc_port_.Start();
-        PLACE_ASYNC_TASK([&]{ HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin); }, 10000);
-        PLACE_ASYNC_TASK([&]{ ssc_port_.Update(); }, 10000);
+        PLACE_ASYNC_TASK([&]{
+            HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+            }, 10000);
 //        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
     }
 
@@ -233,7 +234,7 @@ public:
 //
 //    void CoroTaskRead(){
 //        decltype(OneWirePort::read_memory_coro_)::arg_t arg = {0x8, 0};
-//        oneWirePort1.PlaceTask(OneW_Coro::read_memory, arg, [&](void* ret_val_ptr){
+//        ssc_port_.GetOWPort().PlaceTask(OneW_Coro::read_memory, arg, [&](void* ret_val_ptr){
 //            auto* ret_val = CastArg(ret_val_ptr, OneWirePort::read_memory_coro_);
 //            if(ret_val->has_value()){
 //                auto& v = ret_val->value();
@@ -241,7 +242,7 @@ public:
 //            }
 //        });
 //        decltype(OneWirePort::read_memory_coro_)::arg_t arg2 = {0x10, 0x8};
-//        oneWirePort1.PlaceTask(OneW_Coro::read_memory, arg2, [&](void* ret_val_ptr){
+//        ssc_port_.GetOWPort().PlaceTask(OneW_Coro::read_memory, arg2, [&](void* ret_val_ptr){
 //            auto* ret_val = CastArg(ret_val_ptr, OneWirePort::read_memory_coro_);
 //            if(ret_val->has_value()){
 //                auto& v = ret_val->value();

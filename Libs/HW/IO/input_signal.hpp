@@ -10,18 +10,14 @@ struct InputSignal{
         no_device
     };
     constexpr explicit InputSignal(GPIO_TypeDef* port, uint16_t pin, uint32_t debounce_time) noexcept
-        : pin_(port, pin),
-        debounce_time_(debounce_time)
-    {
-        SetState(pin_.getState());
-    }
-
-    constexpr explicit InputSignal(PIN_BOARD::PIN<PIN_BOARD::PinReadable> pin, uint32_t debounce_time) noexcept
-        : pin_(pin)
+        : pin_(port, pin)
         , debounce_time_(debounce_time)
-    {
-        SetState(pin_.getState());
-    }
+    {}
+
+//    constexpr explicit InputSignal(PIN_BOARD::PIN<PIN_BOARD::PinReadable> pin, uint32_t debounce_time) noexcept
+//        : pin_(pin)
+//        , debounce_time_(debounce_time)
+//    {}
 
     PinConnectionState GetPinConnectionState(){
         auto retV = no_device;
@@ -35,7 +31,7 @@ struct InputSignal{
         return retV;
     }
 
-    constexpr void Update() {
+    constexpr void UpdatePin() {
         if(pin_.getState()){
             if(active_time_ < debounce_time_)
                 active_time_++;
@@ -61,7 +57,7 @@ struct InputSignal{
     }
 private:
     PIN_BOARD::PIN<PIN_BOARD::PinReadable> pin_;
-    PIN_BOARD::LOGIC_LEVEL signal_state_;
+    PIN_BOARD::LOGIC_LEVEL signal_state_ {PIN_BOARD::LOW};
     uint32_t debounce_time_;
     uint32_t active_time_{0};
     bool last_pin_connection_state_{false};

@@ -100,6 +100,10 @@ extern "C"
             MscOne::global().MicroTimHandler();
 
     }
+//    void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi){
+//        if(hspi == &hspi1)
+//            MscOne::global().Spi1RxHandler();
+//    }
 
     void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
         if(hspi == &hspi1)

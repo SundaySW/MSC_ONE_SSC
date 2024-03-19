@@ -10,6 +10,8 @@
 
 #include "ad7792_specs.hpp"
 
+#include "async_tim_tasks.hpp"
+
 #define spi_buffer_size     8
 #define ow_eeprom_size      144
 
@@ -18,7 +20,11 @@ using namespace AD7792_adc;
 class SpiADC
 {
 public:
-    using buffer_v_t = uint16_t;
+    using buffer_v_t = uint8_t;
+
+    enum WaitingFor{
+        data
+    };
 
     SpiADC(PIN_BOARD::PIN<PIN_BOARD::PinWriteable> _ss_pin)
         : cs_pin_(_ss_pin)
@@ -30,20 +36,34 @@ public:
 
     void Start()
     {
+        cs_pin_.setValue(PIN_BOARD::LOW);
         ad7792.Init(RTD_2currentSources, current_210uA, fADC_16_7Hz, gain_1, external, AIN1);
     }
 
     void RxCallBack() {
-//        cs_pin_.setValue(PIN_BOARD::HIGH);
+        switch (waitingFor) {
+            case data:
+                average_value_.PlaceToStorage( (rx_buf[0]<<8) | rx_buf[1] );
+                break;
+        }
     }
     void TxCallBack() {
-//        cs_pin_.setValue(PIN_BOARD::HIGH);
     }
 
     float CalcValue()
     {
-        float v = 1;
-        return v;
+        return LookUpItTable(average_value_.GetAverageValue());
+    }
+
+    float LookUpItTable(uint16_t adc_v){
+        return 1;
+    }
+
+    void RequestADCValue(){
+        waitingFor = data;
+        tx_buf[0] = (0<<WEN) | (1<<RW) | (AD7792_DATA_REGISTER<<RS0);
+        HAL_SPI_Transmit_DMA(hspi_, tx_buf, 1);
+        HAL_SPI_Receive_DMA(hspi_, rx_buf, 2);
     }
 
     bool GetValue(float& value)
@@ -57,9 +77,14 @@ public:
     }
 
     void Enable(){
+        task_n_ = PLACE_ASYNC_TASK([&]{
+                RequestADCValue();
+            }, 100);
     }
 
-    void Disable(){
+    void Disable() const{
+        if(task_n_ != -1)
+            REMOVE_TASK(task_n_);
     }
 
     char* GetTablePtr(){
@@ -69,14 +94,32 @@ public:
 private:
     SPI_HandleTypeDef* hspi_;
     PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin_;
+    WaitingFor waitingFor;
+    int task_n_{-1};
+    struct {
+        long long values{0};
+        std::size_t count{0};
+        uint16_t GetAverageValue(){
+            if(count){
+                uint16_t v = values / count;
+                values = 0;
+                count = 0;
+                return v;
+            }
+            else return 0;
+        }
+        void PlaceToStorage(uint16_t v){
+            values += v;
+            count++;
+        };
+    }average_value_;
 
-    buffer_v_t src_buf[spi_buffer_size]{0};
-    buffer_v_t dst_buf[spi_buffer_size]{0};
+    buffer_v_t tx_buf[spi_buffer_size]{0};
+    buffer_v_t rx_buf[spi_buffer_size]{0};
     std::array<char, ow_eeprom_size> table_;
 
     AD7792_adc::AD7792 ad7792{
         [&](uint8_t* ptr, uint8_t size){
-            cs_pin_.setValue(PIN_BOARD::LOW);
             HAL_SPI_Transmit_DMA(hspi_, ptr, size);
         }
     };

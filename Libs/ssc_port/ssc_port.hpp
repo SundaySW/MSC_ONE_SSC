@@ -16,7 +16,7 @@ struct SSCPort{
         : ow_port_(ow_pin)
         , adc_(cs_pin)
         , param_(param)
-        , connection_pin_(ow_pin.getPort(), ow_pin.getPin(), 100)
+        , connection_pin_(ow_pin.getPort(), ow_pin.getPin(), 2)
     {}
 
     void Init(SPI_HandleTypeDef* spi, TIM_HandleTypeDef* ow_tim){
@@ -25,16 +25,15 @@ struct SSCPort{
         PLACE_ASYNC_TASK([&]
         {
             if(!ow_port_.IsInProcess())
-                connection_pin_.Update();
-
-        }, 10);
+                connection_pin_.UpdatePin();
+        }, 1000);
     }
 
     SpiADC* GetADC(){
         return &adc_;
     }
 
-    void Update(){
+    void UpdatePort(){
         if(!ow_port_.IsInProcess()){
             switch (connection_pin_.GetPinConnectionState()) {
                 case InputSignal::new_connection:
@@ -60,6 +59,9 @@ struct SSCPort{
 
     void Start(){
         adc_.Start();
+        PLACE_ASYNC_TASK([&]{
+            UpdatePort();
+        }, 3000);
     }
 
     void EnableParam(){
@@ -75,6 +77,10 @@ struct SSCPort{
         param_.SetUpdateRate(0);
         adc_.Disable();
     }
+    OneWirePort& GetOWPort(){
+        return ow_port_;
+    }
+private:
     SSCPortParam& param_;
     OneWirePort ow_port_;
     SpiADC adc_;

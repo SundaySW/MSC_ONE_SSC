@@ -15,6 +15,8 @@ struct TaskProvider{
     TaskProvider& operator=(TaskProvider&&) = delete;
     TaskProvider& operator=(const TaskProvider&) = delete;
     TaskProvider& operator() (CallBackT&& h, DelayT d);
+    int Place(CallBackT&& h, DelayT d);
+    bool Remove(unsigned short n);
     TaskProvider& AsLvalue() { return *this; }
 private:
     BaseTaskPool& pool_;

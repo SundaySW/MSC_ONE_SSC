@@ -31,7 +31,8 @@ public:
     void TickHandle(){
         if(disabled_ || has_pending_)
             return;
-        if(count_ += kTick_freq_ >= interval_)
+        count_ += kTick_freq_;
+        if(count_ >= interval_)
             has_pending_ = true;
     }
 
@@ -48,11 +49,11 @@ public:
     }
 
     void Enable(){
-        disabled_ = true;
+        disabled_ = false;
     }
 
     void Disable(){
-        disabled_ = false;
+        disabled_ = true;
     }
 private:
     volatile uint32_t count_{0};
