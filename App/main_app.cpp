@@ -105,16 +105,6 @@ extern "C"
 //            MscOne::global().Spi1RxHandler();
 //    }
 
-    void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
-        if(hspi == &hspi1)
-            MscOne::global().Spi1TxHandler();
-    }
-
-    void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
-        if(hspi == &hspi1)
-            MscOne::global().Spi1RxHandler();
-    }
-
     FDCAN_RxHeaderTypeDef RxHeader;
     uint8_t RxData[8];
     void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)

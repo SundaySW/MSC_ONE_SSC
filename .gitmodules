@@ -10,3 +10,6 @@
 [submodule "Libs/protos_can_device"]
 	path = Libs/protos_can_device
 	url = https://github.com/reus-inc/protos_can_device
+[submodule "function2"]
+	path = function2
+	url = https://github.com/Naios/function2.git

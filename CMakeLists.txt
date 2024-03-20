@@ -26,6 +26,7 @@ include_directories(
 )
 
 add_subdirectory(Drivers)
+add_subdirectory(Third_party/function2)
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/Core/*.*
@@ -73,6 +74,7 @@ set_target_properties(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
         PUBLIC
         ${PROJECT_NAME}-Drivers
+        function2
         )
 
 target_link_options(${PROJECT_NAME}
