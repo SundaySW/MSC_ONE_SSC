@@ -61,13 +61,6 @@ struct AD7792{
         }
     }
 
-    int GetRawValue(){
-        Transmit( (0<<WEN) | (1<<RW) | (AD7792_DATA_REGISTER<<RS0) );
-        uint8_t m1 = Read();
-        uint8_t m2 = Read();
-        return ( (m1<<8) | m2 );
-    }
-
     void RequestData(){
         tx_data_[0] = (0<<WEN) | (1<<RW) | (AD7792_DATA_REGISTER<<RS0);
         Transmit(1);

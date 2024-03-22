@@ -57,21 +57,16 @@ public:
     }
 
     void MicroTimHandler(){
-        ssc_port_.GetOWPort().TimItHandler();
-    }
-
-    void Spi1RxHandler(){
-        ssc_port_.GetADC()->RxCallBack();
-    }
-    void Spi1TxHandler(){
-        ssc_port_.GetADC()->TxCallBack();
+        ssc_port_1.GetOWPort().TimItHandler();
+        ssc_port_2.GetOWPort().TimItHandler();
     }
 
     void PollCoroPort(){
 //        if(oneWirePort1.IsNewConnected()){
 //            CoroTaskRead();
 //        }
-        ssc_port_.GetOWPort().Poll();
+        ssc_port_1.GetOWPort().Poll();
+        ssc_port_2.GetOWPort().Poll();
     }
 
     void initPerf(ADC_HandleTypeDef *adc1,
@@ -90,8 +85,10 @@ public:
         TimIC1 = std::move(Tim_ICMode(timHall1, TIM_CHANNEL_1));
         Valve0Ctrl = std::move(DacParam(dac1, DAC_CHANNEL_1));
         Valve1Ctrl = std::move(DacParam(dac1, DAC_CHANNEL_2));
-        ssc_port_.Init(ssc1_spi, ssc1_ow_tim);
-        sscPortParam1.SetADC(ssc_port_.GetADC());
+        ssc_port_1.Init(ssc1_spi, ssc1_ow_tim);
+        sscPortParam1.SetADC(ssc_port_1.GetADC());
+        ssc_port_2.Init(ssc1_spi, ssc1_ow_tim);
+        sscPortParam2.SetADC(ssc_port_2.GetADC());
 
         Valve0Ctrl.SetId(0xC1);
         Valve0Ctrl.SetCtrlRate(500);
@@ -133,6 +130,7 @@ public:
         hallSensor1.SetSendRate(2000);
 
         sscPortParam1.SetId(0xB1);
+        sscPortParam2.SetId(0xB2);
     }
 
 	void Start()
@@ -145,7 +143,8 @@ public:
         TimIC1.Start();
 		Valve0Ctrl.Start();
 		Valve1Ctrl.Start();
-        ssc_port_.Start();
+        ssc_port_1.Start();
+        ssc_port_2.Start();
         PLACE_ASYNC_TASK([&]{
             HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
             }, 10000);
@@ -252,13 +251,13 @@ public:
 //    }
 
 	void OnPoll() override {
-//        for (auto* param : Params)
-//            if(param != nullptr) param->Poll();
+        for (auto* param : Params)
+            if(param != nullptr) param->Poll();
 	};
 
 	void OnTimer(short ms) override{
-//        for (auto param : Params)
-//            if(param != nullptr) param->OnTimer(ms);
+        for (auto param : Params)
+            if(param != nullptr) param->OnTimer(ms);
 	};
 
     I2C& getI2CMaster(){
@@ -283,9 +282,12 @@ private:
             , eeprom(&I2CMaster, EEPROM_I2C_ADDR)
     {}
 
-    SSCPort ssc_port_{PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(SS0_GPIO_Port, SS0_Pin),
+    SSCPort ssc_port_1{PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(SS0_GPIO_Port, SS0_Pin),
                       PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID0_GPIO_Port, ID0_Pin),
                       sscPortParam1};
+    SSCPort ssc_port_2{PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(SS1_GPIO_Port, SS1_Pin),
+                      PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID1_GPIO_Port, ID1_Pin),
+                      sscPortParam2};
     I2C I2CMaster;
     inline static ADCc3 AdcA1;
     inline static ADCc2 AdcA2;
@@ -301,7 +303,8 @@ private:
     inline static DacParam Valve0Ctrl;
     inline static DacParam Valve1Ctrl;
     inline static SSCPortParam sscPortParam1{&saveCalibParamToEEPROM};
-    inline static constexpr int PARAM_CNT = 9;
+    inline static SSCPortParam sscPortParam2{&saveCalibParamToEEPROM};
+    inline static constexpr int PARAM_CNT = 11;
     inline static constexpr auto Params{[]() constexpr{
         std::array<BaseParam*, PARAM_CNT> result{};
         int pCount = PARAM_CNT-1;
@@ -313,7 +316,9 @@ private:
         result[pCount--] = static_cast<BaseParam*>(&Preasure4);
         result[pCount--] = static_cast<BaseParam*>(&Preasure5);
         result[pCount--] = static_cast<BaseParam*>(&hallSensor0);
-        result[pCount]   = static_cast<BaseParam*>(&hallSensor1);
+        result[pCount--] = static_cast<BaseParam*>(&hallSensor1);
+        result[pCount--] = static_cast<BaseParam*>(&sscPortParam1);
+        result[pCount]   = static_cast<BaseParam*>(&sscPortParam2);
         return result;
     }()};
     Eeprom24AAUID eeprom;

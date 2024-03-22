@@ -35,13 +35,13 @@ class Task
             return value;
         }
 
-        void* operator new(std::size_t size) {
-            return MemoryAllocator::Allocate(size);
-        }
-
-        void operator delete(void* ptr) {
-            MemoryAllocator::Deallocate(ptr);
-        }
+//        void* operator new(std::size_t size) {
+//            return MemoryAllocator::Allocate(size);
+//        }
+//
+//        void operator delete(void* ptr) {
+//            MemoryAllocator::Deallocate(ptr);
+//        }
 
         inline Task<RET_T, ARG_T> get_return_object()
         {

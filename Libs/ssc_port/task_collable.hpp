@@ -9,11 +9,13 @@ struct task {
 
 struct client {
     static void handle(void* context) {
-        static_cast<client*>(context)->handle();
+        static_cast<client*>(context)->AfterTask();
     }
-    void handle() {}
+    void AfterTask() {
+
+    }
     void run_task() {
-        task t = {this, &handle};
+        task t {this, &handle};
         scheduler.run(std::move(task));
     }
 };

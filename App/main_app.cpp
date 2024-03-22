@@ -100,10 +100,6 @@ extern "C"
             MscOne::global().MicroTimHandler();
 
     }
-//    void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi){
-//        if(hspi == &hspi1)
-//            MscOne::global().Spi1RxHandler();
-//    }
 
     FDCAN_RxHeaderTypeDef RxHeader;
     uint8_t RxData[8];

@@ -25,7 +25,7 @@ struct SSCPort{
         PLACE_ASYNC_TASK([&]
         {
             if(!ow_port_.IsInProcess())
-                connection_pin_.UpdatePin();
+                this->connection_pin_.UpdatePin();
         }, 1000);
     }
 
@@ -60,8 +60,8 @@ struct SSCPort{
     void Start(){
         adc_.Start();
         PLACE_ASYNC_TASK([&]{
-            UpdatePort();
-        }, 3000);
+            this->UpdatePort();
+        }, 2000);
     }
 
     void EnableParam(){
@@ -71,12 +71,13 @@ struct SSCPort{
     }
 
     void DisableParam(){
+        adc_.Disable();
         param_send_rate_ = param_.GetSendRate();
         param_update_rate_ = param_.GetUpdateRate();
         param_.SetSendRate(0);
         param_.SetUpdateRate(0);
-        adc_.Disable();
     }
+
     OneWirePort& GetOWPort(){
         return ow_port_;
     }

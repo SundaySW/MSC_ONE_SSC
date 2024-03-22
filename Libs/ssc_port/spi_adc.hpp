@@ -12,6 +12,10 @@
 
 #include "async_tim_tasks.hpp"
 
+#include "spi_driver.hpp"
+
+#include <cmath>
+
 #define spi_buffer_size     8
 #define ow_eeprom_size      144
 
@@ -32,38 +36,46 @@ public:
 
     void SetSPI(SPI_HandleTypeDef* hspi){
         hspi_ = hspi;
+        SPI_Driver::global().SetHandler(hspi);
     }
 
     void Start()
     {
-        cs_pin_.setValue(PIN_BOARD::LOW);
-        ad7792.Init(RTD_2currentSources, current_210uA, fADC_16_7Hz, gain_1, external, AIN1);
+        InitADCChip();
     }
 
-    void RxCallBack() {
-        switch (waitingFor) {
-            case data:
-                average_value_.PlaceToStorage( (rx_buf[0]<<8) | rx_buf[1] );
-                break;
-        }
-    }
-    void TxCallBack() {
+    void InitADCChip(){
+        ad7792.Init(RTD_2currentSources, current_1mA, fADC_16_7Hz, gain_1, external, AIN1);
     }
 
     float CalcValue()
     {
-        return LookUpItTable(average_value_.GetAverageValue());
+        return CalcT(average_value_.GetAverageValue());
     }
 
     float LookUpItTable(uint16_t adc_v){
-        return 1;
+        return adc_v;
+    }
+
+    [[nodiscard]] float CalcT2(float adc_v) const{
+        float Rt = ntc_calib_.R_ref * (adc_v / UINT16_MAX),
+              C = 1 - Rt / ntc_calib_.R0,
+              D = ntc_calib_.b_sq - (4 * ntc_calib_.a * C);
+        return (-ntc_calib_.b + sqrtf(D)) / (2 * ntc_calib_.a);
+    }
+
+    [[nodiscard]] float CalcT(float adc_v) const{
+        auto Rt = ntc_calib_.R_ref * (adc_v / UINT16_MAX),
+             c = 1 - Rt / ntc_calib_.R0,
+             D = ntc_calib_.b_d2sq - ntc_calib_.a * c;
+        return ntc_calib_.r + (sqrtf(D) / ntc_calib_.a);
     }
 
     void RequestADCValue(){
-        waitingFor = data;
-        tx_buf[0] = (0<<WEN) | (1<<RW) | (AD7792_DATA_REGISTER<<RS0);
-        HAL_SPI_Transmit_DMA(hspi_, tx_buf, 1);
-        HAL_SPI_Receive_DMA(hspi_, rx_buf, 2);
+        ad7792.RequestData();
+        SPI_RECEIVE_(rx_buf, 2, &cs_pin_, [&]{
+            average_value_.PlaceToStorage( (rx_buf[0]<<8) | rx_buf[1] );
+        });
     }
 
     bool GetValue(float& value)
@@ -77,12 +89,13 @@ public:
     }
 
     void Enable(){
+//        InitADCChip();
         task_n_ = PLACE_ASYNC_TASK([&]{
-                RequestADCValue();
-            }, 100);
+            this->RequestADCValue();
+        }, 2000);
     }
 
-    void Disable() const{
+    void Disable(){
         if(task_n_ != -1)
             REMOVE_TASK(task_n_);
     }
@@ -94,9 +107,23 @@ public:
 private:
     SPI_HandleTypeDef* hspi_;
     PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin_;
-    WaitingFor waitingFor;
     int task_n_{-1};
-    struct {
+
+    struct{
+        float R_ref = 270,
+              R0 = 100;
+        float A = 3.9083e-3,
+              B = -5.775e-7,
+              C = -4.183e-12;
+        float& a = B,
+               b = A;
+        float  b_d2 = b/2,
+               r = - (b_d2 / a),
+               b_sq = b * b,
+               b_d2sq = b_d2 * b_d2;
+    }ntc_calib_;
+
+    struct{
         long long values{0};
         std::size_t count{0};
         uint16_t GetAverageValue(){
@@ -114,13 +141,12 @@ private:
         };
     }average_value_;
 
-    buffer_v_t tx_buf[spi_buffer_size]{0};
     buffer_v_t rx_buf[spi_buffer_size]{0};
     std::array<char, ow_eeprom_size> table_;
-
+    bool enabled{false};
     AD7792_adc::AD7792 ad7792{
         [&](uint8_t* ptr, uint8_t size){
-            HAL_SPI_Transmit_DMA(hspi_, ptr, size);
+            SPI_TRANSMIT_(ptr, size, &cs_pin_, [&]{});
         }
     };
 };

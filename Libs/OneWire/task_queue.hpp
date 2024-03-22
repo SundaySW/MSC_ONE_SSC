@@ -16,6 +16,14 @@ public:
         return true;
     }
 
+    bool push(T&& new_elem){
+        if(full())
+            return false;
+        elems_++;
+        storage_[tail_] = std::move(new_elem);
+        SetTailIdx();
+        return true;
+    }
     void pop(){
         elems_--;
         SetHeadIdx();
@@ -31,6 +39,11 @@ public:
 
     bool empty(){
         return elems_ == 0;
+    }
+    void clear(){
+        elems_ = 0;
+        tail_ = 0;
+        head_ = 0;
     }
 private:
     std::size_t head_{0};
