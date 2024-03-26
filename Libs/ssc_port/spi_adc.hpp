@@ -1,22 +1,17 @@
 #pragma once
 
-#include "array"
+#include <cmath>
 
 #include "stm32g4xx_hal.h"
+
 #include "protos_core/base_param.h"
 #include "HW/IO/pin.hpp"
 
 #include "ad7792.hpp"
-
 #include "ad7792_specs.hpp"
-
 #include "async_tim_tasks.hpp"
-
 #include "spi_driver.hpp"
 
-#include <cmath>
-
-#define spi_buffer_size     8
 #define ow_eeprom_size      144
 
 using namespace AD7792_adc;
@@ -24,8 +19,6 @@ using namespace AD7792_adc;
 class SpiADC
 {
 public:
-    using buffer_v_t = uint8_t;
-
     enum WaitingFor{
         data
     };
@@ -72,9 +65,9 @@ public:
     }
 
     void RequestADCValue(){
-        ad7792.RequestData();
-        SPI_RECEIVE_(rx_buf, 2, &cs_pin_, [&]{
-            average_value_.PlaceToStorage( (rx_buf[0]<<8) | rx_buf[1] );
+        auto pair_ptr_size = ad7792.RequestDataCmd();
+        SPI_TRANSMIT_RECEIVE_(pair_ptr_size.first, pair_ptr_size.second, 2, &cs_pin_, [&](const uint8_t* data){
+            average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
         });
     }
 
@@ -89,10 +82,13 @@ public:
     }
 
     void Enable(){
-//        InitADCChip();
+        average_value_.Reset();
+//        PLACE_ASYNC_TASK([&]{
+//            SPI_POLL();
+//        }, 500);
         task_n_ = PLACE_ASYNC_TASK([&]{
-            this->RequestADCValue();
-        }, 2000);
+            RequestADCValue();
+        }, 1000);
     }
 
     void Disable(){
@@ -126,6 +122,10 @@ private:
     struct{
         long long values{0};
         std::size_t count{0};
+        void Reset(){
+            values = 0;
+            count = 0;
+        }
         uint16_t GetAverageValue(){
             if(count){
                 uint16_t v = values / count;
@@ -140,13 +140,11 @@ private:
             count++;
         };
     }average_value_;
-
-    buffer_v_t rx_buf[spi_buffer_size]{0};
     std::array<char, ow_eeprom_size> table_;
-    bool enabled{false};
+    bool enabled {false};
     AD7792_adc::AD7792 ad7792{
         [&](uint8_t* ptr, uint8_t size){
-            SPI_TRANSMIT_(ptr, size, &cs_pin_, [&]{});
+            SPI_TRANSMIT_(ptr, size, &cs_pin_, [&](uint8_t*){});
         }
     };
 };

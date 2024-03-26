@@ -56,8 +56,8 @@ public:
         disabled_ = true;
     }
 private:
-    volatile uint32_t count_{0};
-    volatile uint32_t interval_{0};
+    uint32_t count_{0};
+    uint32_t interval_{0};
     uint32_t kTick_freq_ = 1;
     bool disabled_ {true};
     bool has_pending_ {false};

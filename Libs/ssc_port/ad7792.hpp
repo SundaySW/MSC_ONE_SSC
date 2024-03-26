@@ -61,9 +61,15 @@ struct AD7792{
         }
     }
 
-    void RequestData(){
-        tx_data_[0] = (0<<WEN) | (1<<RW) | (AD7792_DATA_REGISTER<<RS0);
-        Transmit(1);
+    void ContinuousModeOn(){
+        tx_data_[0] = (0<<WEN) | (0<<RW) | (AD7792_COMMUNICATION_REGISTER<<RS0);
+        tx_data_[1] = 0b01011100;
+        Transmit(2);
+    }
+
+    std::pair<const uint8_t*, std::size_t>RequestDataCmd(){
+        tx_data_[0] = (0 << WEN) | (1 << RW) | (AD7792_DATA_REGISTER << RS0);
+        return {tx_data_, 1};
     }
 
     std::pair<uint8_t, uint8_t> Calibration() {

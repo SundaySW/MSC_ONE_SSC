@@ -25,7 +25,7 @@ struct SSCPort{
         PLACE_ASYNC_TASK([&]
         {
             if(!ow_port_.IsInProcess())
-                this->connection_pin_.UpdatePin();
+                connection_pin_.UpdatePin();
         }, 1000);
     }
 
@@ -60,7 +60,7 @@ struct SSCPort{
     void Start(){
         adc_.Start();
         PLACE_ASYNC_TASK([&]{
-            this->UpdatePort();
+            UpdatePort();
         }, 2000);
     }
 

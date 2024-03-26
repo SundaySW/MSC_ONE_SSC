@@ -98,7 +98,6 @@ extern "C"
 
         else if(htim->Instance == TIM7)
             MscOne::global().MicroTimHandler();
-
     }
 
     FDCAN_RxHeaderTypeDef RxHeader;
