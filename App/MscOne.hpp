@@ -147,10 +147,10 @@ public:
 //        ssc_port_2.Start();
         PLACE_ASYNC_TASK([&]{
             HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-            }, 10000);
+            }, 1000);
 //        PLACE_ASYNC_TASK([&]{
-//            OnTimer(1);
-//        }, 10);
+//            OnTimerINT(1);
+//        }, 1);
 //        OWDevices.OnSearch(0, OneWire::DEVICE_FAMILY::FAMILY_UNKNOWN);
     }
 
@@ -287,9 +287,11 @@ private:
 
     SSCPort ssc_port_1{PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(SS0_GPIO_Port, SS0_Pin),
                       PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID0_GPIO_Port, ID0_Pin),
+                      PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(GPIOB, GPIO_PIN_4),
                       sscPortParam1};
     SSCPort ssc_port_2{PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(SS1_GPIO_Port, SS1_Pin),
                       PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID1_GPIO_Port, ID1_Pin),
+                       PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(GPIOB, GPIO_PIN_4),
                       sscPortParam2};
     I2C I2CMaster;
     inline static ADCc3 AdcA1;

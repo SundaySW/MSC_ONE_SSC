@@ -12,9 +12,10 @@ struct SSCPort{
     SSCPort() = default;
     SSCPort(PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin,
             PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> ow_pin,
+            PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> miso_rdy_pin,
             SSCPortParam& param)
         : ow_port_(ow_pin)
-        , adc_(cs_pin)
+        , adc_(cs_pin, miso_rdy_pin)
         , param_(param)
         , connection_pin_(ow_pin.getPort(), ow_pin.getPin(), 2)
     {}
@@ -26,7 +27,7 @@ struct SSCPort{
         {
             if(!ow_port_.IsInProcess())
                 connection_pin_.UpdatePin();
-        }, 1000);
+        }, 10);
     }
 
     SpiADC* GetADC(){
@@ -61,7 +62,7 @@ struct SSCPort{
         adc_.Start();
         PLACE_ASYNC_TASK([&]{
             UpdatePort();
-        }, 2000);
+        }, 300);
     }
 
     void EnableParam(){

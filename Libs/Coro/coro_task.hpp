@@ -2,11 +2,11 @@
 
 #include <coroutine>
 #include <optional>
-#include "MemoryAllocator.hpp"
-#include "Event.hpp"
+#include "mem_allocator.hpp"
+#include "coro_event.hpp"
 
-template <typename RET_T, typename ARG_T = RET_T>
-class Task
+template <typename RET_T = bool, typename ARG_T = RET_T>
+class CoroTask
 {
     class Promise
     {
@@ -43,9 +43,9 @@ class Task
 //            MemoryAllocator::Deallocate(ptr);
 //        }
 
-        inline Task<RET_T, ARG_T> get_return_object()
+        inline CoroTask<RET_T, ARG_T> get_return_object()
         {
-            return Task{ std::coroutine_handle<Promise>::from_promise(*this) };
+            return CoroTask{std::coroutine_handle<Promise>::from_promise(*this) };
         }
 
         void return_void() {
@@ -72,11 +72,11 @@ public:
     using ret_val_t = typename Promise::return_val_type;
     using arg_val_t = typename Promise::arg_val_type;
 
-    explicit Task(std::coroutine_handle<Promise> handle)
-        : handle_(handle)
+    explicit CoroTask(std::coroutine_handle<Promise> handle)
+        :handle_(handle)
     {}
 
-    ~Task() {
+    ~CoroTask() {
         if (handle_)
             handle_.destroy();
     }

@@ -62,11 +62,22 @@ public:
         return static_cast<LOGIC_LEVEL*>(&currentState_);
     }
 
+    constexpr void SetAFSpi1(){
+        port_->MODER = (port_->MODER)
+                       & (~(GPIO_MODER_MODE0 << (position_ * 2U)))
+                       | ((GPIO_MODE_AF_PP & GPIO_MODE) << (position_ * 2U));
+        port_->AFR[position_ >> 3U] = (port_->AFR[position_ >> 3U])
+                                      & (~(0xFU << ((position_ & 0x07U) * 4U)))
+                                      | ((GPIO_AF5_SPI1) << ((position_ & 0x07U) * 4U));
+    }
+
     constexpr void setAsOutput(){
+        port_->AFR[position_ >> 3u] &= ~(0xFu << ((position_ & 0x07u) * 4u));
         port_->MODER = (port_->MODER & ~(0x03 << (2 * position_))) | (0x01 << (2 * position_));
     }
 
     constexpr void setAsInput(){
+        port_->AFR[position_ >> 3u] &= ~(0xFu << ((position_ & 0x07u) * 4u));
         port_->MODER = port_->MODER & ~(0x03 << (2 * position_));
     }
 

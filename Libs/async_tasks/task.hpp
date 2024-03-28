@@ -2,20 +2,9 @@
 
 #include <functional>
 
-namespace async_tim_task{
+#include "fwd.hpp"
 
-    /**
- * @brief possible use:
- * impl weak HAL func:
- * void HAL_IncTick()
- * {
-        uwTick += uwTickFreq;
-        SysTickTimHandler();
-    }
-    or:
-    use MACRO - TASK_POOL_ON_TIM in interrupt handler
-    and MACRO - TASK_POOL_POLL im poll loop
- */
+namespace async_tim_task{
 
 class AsyncTask {
 public:

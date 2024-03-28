@@ -10,8 +10,7 @@
 
 #include "HW/IO/pin.hpp"
 
-#include "Coro/Event.hpp"
-#include "Coro/Task.hpp"
+#include "Coro/coro_task.hpp"
 
 #include "task_queue.hpp"
 
@@ -88,7 +87,6 @@ namespace OneW_Coro{
             finished = true;
             call_back(static_cast<void*>(ret_storage_));
         }
-
         template<class CoroT>
         void ResumeCoro(){
             auto& arg = *GetStoredArgPtr<typename CoroT::arg_t>();
@@ -137,8 +135,8 @@ class OneWirePort{
 
 public:
     explicit OneWirePort(PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> pin, TIM_HandleTypeDef* htim = nullptr)
-            : pin_(pin)
-            , htim_(htim)
+        :pin_(pin)
+        ,htim_(htim)
     {}
 
     void SetTim(TIM_HandleTypeDef* tim){
@@ -237,7 +235,7 @@ public:
     }
 
 private:
-    using Future_uint = Task<unsigned char>;
+    using Future_uint = CoroTask<unsigned char>;
     Future_uint write_bit_coro_ = WriteBit();
     Future_uint read_bit_coro_ = ReadBit();
     Future_uint write_byte_coro_ = WriteByte();
@@ -246,9 +244,8 @@ private:
     Future_uint verify_coro = Verify();
 
     bool in_process = false;
-    using CoroTask = OneW_Coro::CoroTask;
-    TaskQueue<CoroTask, 10> coro_to_run;
-    CoroTask running_task {};
+    TaskQueue<OneW_Coro::CoroTask, 10> coro_to_run;
+    OneW_Coro::CoroTask running_task {};
 
     PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> pin_;
     Event timer_ev_;
@@ -265,7 +262,7 @@ public:
         uint8_t addr{0};
         std::array<uint8_t, 8> data;
     };
-    Task<uint8_t, Write_Coro_Arg> write_scratchpad_coro_ = WriteScratchpad(write_scratchpad_coro_);
+    CoroTask<uint8_t, Write_Coro_Arg> write_scratchpad_coro_ = WriteScratchpad(write_scratchpad_coro_);
     decltype(write_scratchpad_coro_) WriteScratchpad(decltype(write_scratchpad_coro_)& this_coro_){
         while (true){
             auto arg = this_coro_.GetArgValue();
@@ -293,7 +290,7 @@ public:
         uint8_t offset{0x20};
         uint8_t addr{0};
     };
-    Task<std::array<char, 8>, Read_Coro_Arg> read_memory_coro_ = ReadMemory(read_memory_coro_);
+    CoroTask<std::array<char, 8>, Read_Coro_Arg> read_memory_coro_ = ReadMemory(read_memory_coro_);
     decltype(read_memory_coro_) ReadMemory(decltype(read_memory_coro_)& this_coro_){
         decltype(read_memory_coro_)::ret_t buff{};
         while (true){
@@ -315,7 +312,7 @@ public:
         }
     }
 
-    Task<uint8_t, char*> read_full_memory_coro_ = ReadFullMemory(read_full_memory_coro_);
+    CoroTask<uint8_t, char*> read_full_memory_coro_ = ReadFullMemory(read_full_memory_coro_);
     decltype(read_full_memory_coro_) ReadFullMemory(decltype(read_full_memory_coro_)& this_coro_){
         while (true){
             RESET_OW_LINE
@@ -342,7 +339,7 @@ public:
         uint8_t es{0x07};
     };
 private:
-    Task<uint8_t, CopyScrpd_Coro_Arg> copy_scratchpad_coro_ = CopyScratchpad(copy_scratchpad_coro_);
+    CoroTask<uint8_t, CopyScrpd_Coro_Arg> copy_scratchpad_coro_ = CopyScratchpad(copy_scratchpad_coro_);
     decltype(copy_scratchpad_coro_) CopyScratchpad(decltype(copy_scratchpad_coro_)& this_coro_){
         while (true){
             RESET_OW_LINE

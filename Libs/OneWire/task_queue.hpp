@@ -7,23 +7,16 @@ class TaskQueue{
 public:
     TaskQueue()=default;
 
-    bool push(T& new_elem){
+    template<typename TT>
+    bool push(TT&& new_elem){
         if(full())
             return false;
         elems_++;
-        storage_[tail_] = std::move(new_elem);
+        storage_[tail_] = std::forward<T>(new_elem);
         SetTailIdx();
         return true;
     }
 
-    bool push(T&& new_elem){
-        if(full())
-            return false;
-        elems_++;
-        storage_[tail_] = std::move(new_elem);
-        SetTailIdx();
-        return true;
-    }
     void pop(){
         elems_--;
         SetHeadIdx();

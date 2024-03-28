@@ -23,8 +23,9 @@ public:
         data
     };
 
-    SpiADC(PIN_BOARD::PIN<PIN_BOARD::PinWriteable> _ss_pin)
-        : cs_pin_(_ss_pin)
+    SpiADC(PIN_BOARD::PIN<PIN_BOARD::PinWriteable> _ss_pin, PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> _miso_rdy_pin)
+        :cs_pin_(_ss_pin)
+        ,miso_rdy_pin_(_miso_rdy_pin)
     {}
 
     void SetSPI(SPI_HandleTypeDef* hspi){
@@ -65,19 +66,21 @@ public:
     }
 
     void RequestADCValue(){
-        auto pair_ptr_size = ad7792.RequestDataCmd();
-        SPI_TRANSMIT_RECEIVE_(pair_ptr_size.first, pair_ptr_size.second, 2, &cs_pin_, [&](const uint8_t* data){
+        SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, &cs_pin_, [&](const uint8_t* data){
             average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
         });
     }
 
     bool GetValue(float& value)
     {
-        value = CalcValue();
-        return true;
+        if(average_value_.Ready()){
+            value = CalcValue();
+            return true;
+        }
+        return false;
     }
 
-    SPI_HandleTypeDef * getSpiHandler(){
+    SPI_HandleTypeDef* GetSpiHandler(){
         return hspi_;
     }
 
@@ -85,10 +88,11 @@ public:
         average_value_.Reset();
 //        PLACE_ASYNC_TASK([&]{
 //            SPI_POLL();
-//        }, 500);
+//        }, 100);
         task_n_ = PLACE_ASYNC_TASK([&]{
             RequestADCValue();
-        }, 1000);
+//            single_conv_coro.Resume();
+        }, 100);
     }
 
     void Disable(){
@@ -100,9 +104,38 @@ public:
         return table_.data();
     }
 
+    Event pin_ev_;
+    CoroTask<> single_conv_coro = SingleConversion(single_conv_coro);
+    CoroTask<> SingleConversion(decltype(single_conv_coro)& this_coro_){
+        int pin_wait_task_n;
+        bool state;
+        while (true){
+            cs_pin_.setValue(PIN_BOARD::LOW);
+            SPI_DRIVER_.PlaceTask(ad7792.SingleConversionCmd1());
+            SPI_DRIVER_.PlaceTask(ad7792.SingleConversionCmd2(), [&](uint8_t*){
+                miso_rdy_pin_.setAsInput();
+                pin_wait_task_n = PLACE_ASYNC_TASK([&]{
+                    state = miso_rdy_pin_.getState();
+                    if(!miso_rdy_pin_.getState()){
+                        miso_rdy_pin_.SetAFSpi1();
+                        pin_ev_.Notify();
+                    }
+                },1);
+            });
+            co_await pin_ev_;
+            REMOVE_TASK(pin_wait_task_n);
+            SPI_DRIVER_.PlaceTask(ad7792.SingleConversionCmd3(), 2, [&](const uint8_t* data){
+                average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
+            });
+            cs_pin_.setValue(PIN_BOARD::HIGH);
+            co_yield {};
+        }
+    }
+
 private:
     SPI_HandleTypeDef* hspi_;
     PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin_;
+    PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> miso_rdy_pin_;
     int task_n_{-1};
 
     struct{
@@ -139,12 +172,17 @@ private:
             values += v;
             count++;
         };
+        [[nodiscard]] bool Ready() const{
+            return count;
+        }
     }average_value_;
+
     std::array<char, ow_eeprom_size> table_;
     bool enabled {false};
+
     AD7792_adc::AD7792 ad7792{
-        [&](uint8_t* ptr, uint8_t size){
-            SPI_TRANSMIT_(ptr, size, &cs_pin_, [&](uint8_t*){});
+        [&](auto pair_ptr_size){
+            SPI_DRIVER_.PlaceTask(pair_ptr_size, &cs_pin_);
         }
     };
 };
