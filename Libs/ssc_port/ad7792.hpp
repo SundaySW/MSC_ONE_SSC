@@ -43,39 +43,35 @@ struct AD7792{
         Transmit(4);
     }
 
-    void Init(uint8_t sensorType, uint8_t ioCurrent, uint8_t updateRate, uint8_t adcGain, uint8_t adcReferenceSource, uint8_t adcChannel) {
-        if (sensorType == RTD_2currentSources)
-        {
-            Reset();
-            IO_Set(ioCurrent);
-            Config_Set( ( (1<<4) | (adcGain & 0x07) ), ( (adcReferenceSource<<7) | (1<<4) | (adcChannel & 0x07) ) );
-            Mode_Set(0, updateRate & 0x0f);
-        }
-
-        else if (sensorType == NTC_onAIN2)
-        {
-            Reset();
-            IO_Set(ioCurrent);
-            Config_Set ( (1<<4) | (adcGain & 0x07),(adcReferenceSource<<7) | (adcChannel & 0x07) );
-            Mode_Set(0, updateRate & 0x0f);
-        }
+    void Init(uint8_t ioCurrent, uint8_t updateRate, uint8_t adcGain, uint8_t adcReferenceSource, uint8_t adcChannel) {
+        Reset();
+        IO_Set(ioCurrent);
+        Config_Set( ( (1<<4) | (adcGain & 0x07) ), ( (adcReferenceSource<<7) | (1<<4) | (adcChannel & 0x07) ) );
+        Mode_Set(0, updateRate & 0x0f);
     }
-    void InitSingleConversion(uint8_t sensorType, uint8_t ioCurrent, uint8_t updateRate, uint8_t adcGain, uint8_t adcReferenceSource, uint8_t adcChannel) {
-        if (sensorType == RTD_2currentSources)
-        {
-            Reset();
-            IO_Set(ioCurrent);
-            Config_Set( ( (1<<4) | (adcGain & 0x07) ), ( (adcReferenceSource<<7) | (1<<4) | (adcChannel & 0x07) ) );
-            Mode_Set(0x20, updateRate & 0x0f);
-        }
 
-        else if (sensorType == NTC_onAIN2)
-        {
-            Reset();
-            IO_Set(ioCurrent);
-            Config_Set ( (1<<4) | (adcGain & 0x07),(adcReferenceSource<<7) | (adcChannel & 0x07) );
-            Mode_Set(0x20, updateRate & 0x0f);
-        }
+    void Init() {
+        Reset();
+
+        tx_data_[0] = 0x28;
+        tx_data_[1] = 0;
+        Transmit(2);
+
+        tx_data_[0] = 0x10;
+        tx_data_[1] = 0x06;
+        tx_data_[2] = 0x90;
+        Transmit(3);
+
+        tx_data_[0] = 0x08;
+        tx_data_[1] = 0;
+        tx_data_[2] = 0x0F;
+        Transmit(3);
+    }
+
+    void InitSingleConversion(uint8_t ioCurrent, uint8_t updateRate, uint8_t adcGain, uint8_t adcReferenceSource, uint8_t adcChannel) {
+        Reset();
+        IO_Set(ioCurrent);
+        Config_Set( ( (1<<4) | (adcGain & 0x07) ), ( (adcReferenceSource<<7) | (1<<4) | (adcChannel & 0x07) ) );
     }
 
     void ContinuousModeOn(){
@@ -84,9 +80,21 @@ struct AD7792{
         Transmit(2);
     }
 
+    void ReadModeReg(){
+        tx_data_[0] = (0 << WEN) | (1 << RW) | (AD7792_MODE_REGISTER << RS0);
+        Transmit(1);
+    }
+
     std::pair<const uint8_t*, std::size_t> RequestDataCmd(){
         tx_data_[0] = (0 << WEN) | (1 << RW) | (AD7792_DATA_REGISTER << RS0);
         return {tx_data_, 1};
+    }
+
+    std::pair<const uint8_t*, std::size_t> SingleConversionCmd(){
+        tx_data_[0] = 0x08;
+        tx_data_[1] = 0x200A >> 8;
+        tx_data_[2] = 0x200A & 0x0f;
+        return {tx_data_, 3};
     }
 
     std::pair<const uint8_t*, std::size_t> SingleConversionCmd1(){
@@ -98,10 +106,6 @@ struct AD7792{
         tx_data_[0] = 0x200A >> 8;
         tx_data_[1] = 0x200A & 0x0f;
         return {tx_data_, 2};
-    }
-    std::pair<const uint8_t*, std::size_t> SingleConversionCmd3(){
-        tx_data_[0] = 0x58;
-        return {tx_data_, 1};
     }
 
     std::pair<uint8_t, uint8_t> Calibration() {
@@ -193,14 +197,15 @@ private:
 //        transmit_f_(v, Size);
 //    }
 
-    void Transmit (uint8_t size){
+    void Transmit(uint8_t size){
         transmit_f_({tx_data_, size});
     }
 
     uint8_t Read(){
         return {};
     }
-    void FullScale_Write (uint8_t H, uint8_t L)
+
+    void FullScale_Write(uint8_t H, uint8_t L)
     {
         tx_data_[0] = (0<<WEN) | (0<<RW) | (AD7792_FULLSCALE_REGISTER<<RS0);
         tx_data_[1] = H;

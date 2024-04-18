@@ -3,7 +3,7 @@
 #include <bit>
 #include <cstring>
 
-#include "IO/pin.hpp"
+#include "HW/IO/pin.hpp"
 
 #include "stm32g4xx_hal_spi.h"
 

@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <algorithm>
 
-#include "IO/pin.hpp"
+#include "HW/IO/pin.hpp"
 
 #include "stm32g4xx_hal_tim.h"
 

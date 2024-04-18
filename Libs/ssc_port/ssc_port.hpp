@@ -27,7 +27,7 @@ struct SSCPort{
         {
             if(!ow_port_.IsInProcess())
                 connection_pin_.UpdatePin();
-        }, 10);
+        }, 100);
     }
 
     SpiADC* GetADC(){
@@ -62,7 +62,7 @@ struct SSCPort{
         adc_.Start();
         PLACE_ASYNC_TASK([&]{
             UpdatePort();
-        }, 300);
+        }, 10);
     }
 
     void EnableParam(){

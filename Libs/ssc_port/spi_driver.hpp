@@ -39,6 +39,10 @@ struct SPI_Driver {
         spi_handler_ = spiHandle;
     }
 
+    static auto GetHandler(){
+        return spi_handler_;
+    }
+
     void TxCallbackHandler(){
         if(current_task_.Type() == transmit_receive)
             return;
@@ -90,7 +94,6 @@ struct SPI_Driver {
 
     void PlaceTask(auto&& ... args){
         tasks_.push(SpiTask(std::forward<decltype(args)>(args)...));
-        ProcessTask();
     }
 
     auto operator()(){
@@ -176,8 +179,8 @@ private:
         std::optional<PIN_BOARD::PIN<PIN_BOARD::PinWriteable>*> pin_;
     private:
         TaskType type_;
-        uint8_t rx_data[buffer_size];
-        uint8_t tx_data_[buffer_size];
+        uint8_t rx_data[buffer_size]{0,0,0,0};
+        uint8_t tx_data_[buffer_size]{0,0,0,0};
         std::size_t tx_size_;
         std::size_t rx_size_;
         std::optional<CallBackT> call_back_;
