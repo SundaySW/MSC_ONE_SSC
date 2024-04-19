@@ -23,11 +23,6 @@ struct SSCPort{
     void Init(SPI_HandleTypeDef* spi, TIM_HandleTypeDef* ow_tim){
         ow_port_.SetTim(ow_tim);
         adc_.SetSPI(spi);
-        PLACE_ASYNC_TASK([&]
-        {
-            if(!ow_port_.IsInProcess())
-                connection_pin_.UpdatePin();
-        }, 100);
     }
 
     SpiADC* GetADC(){
@@ -59,6 +54,10 @@ struct SSCPort{
     }
 
     void Start(){
+        PLACE_ASYNC_TASK([&]{
+            if(!ow_port_.IsInProcess())
+                connection_pin_.UpdatePin();
+        }, 100);
         adc_.Start();
         PLACE_ASYNC_TASK([&]{
             UpdatePort();

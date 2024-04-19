@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cmath>
-
 #include "stm32g4xx_hal.h"
 
 #include "protos_core/base_param.h"
@@ -14,17 +12,14 @@
 
 #include "Coro/coro_mutex.hpp"
 
-#define ow_eeprom_size      144
+#include "ow_table.hpp"
+#include "platinum_thermistor.hpp"
+
 
 using namespace AD7792_adc;
 
-class SpiADC
+struct SpiADC
 {
-public:
-    enum WaitingFor{
-        data
-    };
-
     SpiADC(PIN_BOARD::PIN<PIN_BOARD::PinWriteable> _ss_pin, PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> _miso_rdy_pin)
         :cs_pin_(_ss_pin)
         ,miso_rdy_pin_(_miso_rdy_pin)
@@ -37,40 +32,29 @@ public:
 
     void Start()
     {
-//        InitADCChip();
+        InitADCChip();
+        task_n_ = PLACE_ASYNC_TASK_SUSPENDED([&]{
+//            cont_conv_coro.Resume();
+            RequestADCValue();
+        }, 5);
     }
 
-    void InitADCChip(){
-        ad7792.Init(current_1mA, fADC_16_7Hz, gain_1, external, AIN1);
+    SPI_HandleTypeDef* GetSpiHandler(){
+        return hspi_;
     }
 
-    float CalcValue()
-    {
-        return CalcT(average_value_.GetAverageValue());
+    void Enable(){
+        LoadOWData();
+        average_value_.Reset();
+        RESUME_TASK(task_n_);
     }
 
-    float LookUpItTable(uint16_t adc_v){
-        return adc_v;
+    void Disable() const{
+        STOP_TASK(task_n_);
     }
 
-    [[nodiscard]] float CalcT2(float adc_v) const{
-        float Rt = ntc_calib_.R_ref * (adc_v / UINT16_MAX),
-              C = 1 - Rt / ntc_calib_.R0,
-              D = ntc_calib_.b_sq - (4 * ntc_calib_.a * C);
-        return (-ntc_calib_.b + sqrtf(D)) / (2 * ntc_calib_.a);
-    }
-
-    [[nodiscard]] float CalcT(float adc_v) const{
-        auto Rt = ntc_calib_.R_ref * (adc_v / UINT16_MAX),
-             c = 1 - Rt / ntc_calib_.R0,
-             D = ntc_calib_.b_d2sq - ntc_calib_.a * c;
-        return ntc_calib_.r + (sqrtf(D) / ntc_calib_.a);
-    }
-
-    void RequestADCValue(){
-        SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, &cs_pin_, [&](const uint8_t* data){
-            average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
-        });
+    char* GetTablePtr(){
+        return ow_table_.data();
     }
 
     bool GetValue(float& value)
@@ -82,97 +66,20 @@ public:
         return false;
     }
 
-    SPI_HandleTypeDef* GetSpiHandler(){
-        return hspi_;
-    }
-
-    void Enable(){
-        average_value_.Reset();
-        PLACE_ASYNC_TASK([&]{
-            SPI_POLL();
-        }, 100'000);
-        task_n_ = PLACE_ASYNC_TASK([&]{
-            cont_conv_coro.Resume();
-        }, 5);
-    }
-
-    void Disable(){
-        if(task_n_ != -1)
-            REMOVE_TASK(task_n_);
-    }
-
-    char* GetTablePtr(){
-        return table_.data();
-    }
-
-    Event pin_ev_;
-    CoroTask<> single_conv_coro = SingleConversion();
-    CoroTask<> SingleConversion(){
-        int pin_wait_task_n;
-        while (true){
-            cs_pin_.setValue(PIN_BOARD::LOW);
-            SPI_DRIVER_.PlaceTask(ad7792.SingleConversionCmd(), [&](uint8_t*){
-                pin_wait_task_n = PLACE_ASYNC_TASK([&]{
-                    if(!miso_rdy_pin_.getState()){
-                        SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, &cs_pin_, [&](const uint8_t* data){
-                            average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
-                        });
-                        pin_ev_.Notify();
-                        return;
-                    }
-                },100'000);
-            });
-            co_await pin_ev_;
-            REMOVE_TASK(pin_wait_task_n);
-            co_yield {};
-        }
-    }
-
-    CoroTask<> cont_conv_coro = ContConversion();
-    CoroTask<> ContConversion(){
-        int pin_wait_task_n = PLACE_ASYNC_TASK_SUSPENDED([&]{
-            if(!miso_rdy_pin_.getState()){
-                SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
-                    average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
-                    cs_pin_.setValue(PIN_BOARD::HIGH);
-                });
-                STOP_TASK(pin_wait_task_n);
-                pin_ev_.Notify();
-            }
-        },100'000);
-        while (true){
-            if(coro_mutex_.TryLock()){
-                cs_pin_.setValue(PIN_BOARD::LOW);
-                InitADCChip();
-                RESUME_TASK(pin_wait_task_n);
-                co_await pin_ev_;
-                coro_mutex_.UnLock();
-                co_yield {};
-            }
-            co_yield {};
-        }
-    }
-
 private:
+    AD7792_adc::AD7792 ad7792{
+        [&](std::pair<uint8_t*, std::size_t> ptr_size){
+            SPI_DRIVER_.PlaceTask(ptr_size, &cs_pin_);
+        }
+    };
     static inline CoroMutex coro_mutex_;
     SPI_HandleTypeDef* hspi_;
     PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin_;
     PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> miso_rdy_pin_;
     int task_n_{-1};
-
-    struct{
-        float R_ref = 270,
-              R0 = 100;
-        float A = 3.9083e-3,
-              B = -5.775e-7,
-              C = -4.183e-12;
-        float& a = B,
-               b = A;
-        float  b_d2 = b/2,
-               r = - (b_d2 / a),
-               b_sq = b * b,
-               b_d2sq = b_d2 * b_d2;
-    }ntc_calib_;
+    bool enabled {false};
+    PRTD ntc_;
+    OWTable ow_table_;
 
     struct{
         long long values{0};
@@ -199,12 +106,79 @@ private:
         }
     }average_value_;
 
-    std::array<char, ow_eeprom_size> table_;
-    bool enabled {false};
 
-    AD7792_adc::AD7792 ad7792{
-        [&](std::pair<uint8_t*, std::size_t> ptr_size){
-            SPI_DRIVER_.PlaceTask(ptr_size);
+    void LoadOWData(){
+//        ntc_.StoreRref(ow_table_.GetRref());
+//        ntc_.StoreR0(ow_table_.GetR0());
+//        ntc_.StorePlatinumData(ow_table_.GetPlatinumData());
+    }
+
+    void InitADCChip(){
+        ad7792.Init(current_1mA, fADC_16_7Hz, gain_1, external, AIN1);
+    }
+
+    float CalcValue()
+    {
+        return ntc_.CalcT(average_value_.GetAverageValue());
+    }
+
+    float LookUpItTable(uint16_t adc_v){
+        return adc_v;
+    }
+
+    void RequestADCValue(){
+        SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, &cs_pin_, [&](const uint8_t* data){
+            average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
+        });
+    }
+
+    Event pin_ev_;
+    CoroTask<> single_conv_coro = SingleConversion();
+    CoroTask<> SingleConversion(){
+        int pin_wait_task_n = PLACE_ASYNC_TASK_SUSPENDED_QUICKEST([&]{
+            if(!miso_rdy_pin_.getState()){
+                SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
+                    average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
+                    cs_pin_.setValue(PIN_BOARD::HIGH);
+                });
+                STOP_TASK(pin_wait_task_n);
+                pin_ev_.Notify();
+            }
+        });
+        while (true){
+            if(coro_mutex_.TryLock()) {
+                cs_pin_.setValue(PIN_BOARD::LOW);
+                SPI_DRIVER_.PlaceTask(ad7792.SingleConversionCmd(), [&](uint8_t *) {});
+                RESUME_TASK(pin_wait_task_n);
+                co_await pin_ev_;
+                coro_mutex_.UnLock();
+                co_yield {};
+            }
+            co_yield {};
         }
-    };
+    }
+
+    CoroTask<> cont_conv_coro = ContConversion();
+    CoroTask<> ContConversion(){
+        int pin_wait_task_n = PLACE_ASYNC_TASK_SUSPENDED_QUICKEST([&]{
+            if(!miso_rdy_pin_.getState()){
+                SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
+                    average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
+                    cs_pin_.setValue(PIN_BOARD::HIGH);
+                });
+                STOP_TASK(pin_wait_task_n);
+                pin_ev_.Notify();
+            }
+        });
+        while (true){
+            if(coro_mutex_.TryLock()){
+                cs_pin_.setValue(PIN_BOARD::LOW);
+                RESUME_TASK(pin_wait_task_n);
+                co_await pin_ev_;
+                coro_mutex_.UnLock();
+                co_yield {};
+            }
+            co_yield {};
+        }
+    }
 };

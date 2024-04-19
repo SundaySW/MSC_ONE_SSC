@@ -33,6 +33,9 @@ struct SPI_Driver {
     explicit SPI_Driver(SPI_HandleTypeDef* hspi)
     {
         spi_handler_ = hspi;
+        PLACE_ASYNC_QUICKEST([&]{
+            SPI_POLL();
+        });
     }
 
     static void SetHandler(SPI_HandleTypeDef* spiHandle){
@@ -164,8 +167,8 @@ private:
                 call_back_.value()(rx_data);
         }
         void ChipRelease(){
-//            if(pin_)
-//                pin_.value()->setValue(PIN_BOARD::HIGH);
+            if(pin_)
+                pin_.value()->setValue(PIN_BOARD::HIGH);
         }
         void ChipSelect(){
             if(pin_)
