@@ -3,20 +3,20 @@
 #include "stm32g4xx_hal.h"
 
 #include "protos_core/base_param.h"
-#include "HW/IO/pin.hpp"
+#include "embedded_hw_utils/IO/pin.hpp"
 
 #include "ad7792.hpp"
 #include "ad7792_specs.hpp"
 #include "async_tim_tasks.hpp"
-#include "spi_driver.hpp"
+#include "embedded_hw_utils/connectivity/spi/spi_driver.hpp"
 
 #include "Coro/coro_mutex.hpp"
 
 #include "ow_table.hpp"
 #include "platinum_thermistor.hpp"
 
-
 using namespace AD7792_adc;
+using namespace connectivity;
 
 struct SpiADC
 {
@@ -69,7 +69,7 @@ struct SpiADC
 private:
     AD7792_adc::AD7792 ad7792{
         [&](std::pair<uint8_t*, std::size_t> ptr_size){
-            SPI_DRIVER_.PlaceTask(ptr_size, &cs_pin_);
+            SPI_DRIVER_.PlaceTask(&cs_pin_, ptr_size);
         }
     };
     static inline CoroMutex coro_mutex_;
@@ -127,7 +127,7 @@ private:
     }
 
     void RequestADCValue(){
-        SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, &cs_pin_, [&](const uint8_t* data){
+        SPI_DRIVER_.PlaceTask(&cs_pin_, ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
             average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
         });
     }

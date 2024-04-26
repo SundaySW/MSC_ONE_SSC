@@ -93,6 +93,7 @@ utils_target_print_size(${PROJECT_NAME})
 target_compile_options(${PROJECT_NAME}
         PRIVATE
         -Wno-volatile
+#        -fpermissive
 #        -Wall
 #        -Wextra
 #        -Wpedantic

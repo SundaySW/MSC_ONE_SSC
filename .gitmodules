@@ -13,3 +13,6 @@
 [submodule "function2"]
 	path = function2
 	url = https://github.com/Naios/function2.git
+[submodule "Libs/embedded_hw_utils"]
+	path = Libs/embedded_hw_utils
+	url = https://github.com/SundaySW/embedded_hw_utils

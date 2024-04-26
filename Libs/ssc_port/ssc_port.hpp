@@ -2,7 +2,7 @@
 #include "OneWire/one_wire.hpp"
 #include "spi_adc.hpp"
 #include "ssc_port_param.hpp"
-#include "HW/IO/input_signal.hpp"
+#include "embedded_hw_utils/IO/input_signal.hpp"
 #include "async_tim_tasks.hpp"
 
 #define param_default_send_rate     (2000)

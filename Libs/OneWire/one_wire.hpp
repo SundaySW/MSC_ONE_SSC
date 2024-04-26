@@ -8,11 +8,10 @@
 #include "stm32g4xx.h"
 #include "stm32g4xx_hal_tim.h"
 
-#include "HW/IO/pin.hpp"
+#include "embedded_hw_utils/utils/task_queue.hpp"
+#include "embedded_hw_utils/IO/pin.hpp"
 
 #include "Coro/coro_task.hpp"
-
-#include "task_queue.hpp"
 
 #include "main.h"
 
