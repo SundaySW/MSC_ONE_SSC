@@ -26,7 +26,7 @@ struct OWTable{
     auto GetPlatinumData() ->std::array<float,3> {
         return {GetFloatFromIdx(2), GetFloatFromIdx(3), GetFloatFromIdx(4)};
     }
-   auto* data(){
+    auto* data(){
         return table_.data();
     }
 private:

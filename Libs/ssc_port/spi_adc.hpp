@@ -15,19 +15,16 @@
 #include "ow_table.hpp"
 #include "platinum_thermistor.hpp"
 
-using namespace AD7792_adc;
-using namespace connectivity;
-
 struct SpiADC
 {
-    SpiADC(PIN_BOARD::PIN<PIN_BOARD::PinWriteable> _ss_pin, PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> _miso_rdy_pin)
+    SpiADC(pin_board::PIN<pin_board::Writeable> _ss_pin, pin_board::PIN<pin_board::Switchable> _miso_rdy_pin)
         :cs_pin_(_ss_pin)
         ,miso_rdy_pin_(_miso_rdy_pin)
     {}
 
     void SetSPI(SPI_HandleTypeDef* hspi){
         hspi_ = hspi;
-        SPI_Driver::global().SetHandler(hspi);
+        connectivity::SPI_Driver::global().PlacePort(hspi);
     }
 
     void Start()
@@ -69,13 +66,13 @@ struct SpiADC
 private:
     AD7792_adc::AD7792 ad7792{
         [&](std::pair<uint8_t*, std::size_t> ptr_size){
-            SPI_DRIVER_.PlaceTask(&cs_pin_, ptr_size);
+            connectivity::SPI_DRIVER_(hspi_)->PlaceTask(&cs_pin_, ptr_size);
         }
     };
     static inline CoroMutex coro_mutex_;
     SPI_HandleTypeDef* hspi_;
-    PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin_;
-    PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> miso_rdy_pin_;
+    pin_board::PIN<pin_board::Writeable> cs_pin_;
+    pin_board::PIN<pin_board::Switchable> miso_rdy_pin_;
     int task_n_{-1};
     bool enabled {false};
     PRTD ntc_;
@@ -114,7 +111,8 @@ private:
     }
 
     void InitADCChip(){
-        ad7792.Init(current_1mA, fADC_16_7Hz, gain_1, external, AIN1);
+        ad7792.Init(AD7792_adc::current_1mA, AD7792_adc::fADC_16_7Hz,
+                    AD7792_adc::gain_1, AD7792_adc::external, AD7792_adc::AIN1);
     }
 
     float CalcValue()
@@ -127,7 +125,7 @@ private:
     }
 
     void RequestADCValue(){
-        SPI_DRIVER_.PlaceTask(&cs_pin_, ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
+        connectivity::SPI_DRIVER_(hspi_)->PlaceTask(&cs_pin_, ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
             average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
         });
     }
@@ -137,9 +135,9 @@ private:
     CoroTask<> SingleConversion(){
         int pin_wait_task_n = PLACE_ASYNC_TASK_SUSPENDED_QUICKEST([&]{
             if(!miso_rdy_pin_.getState()){
-                SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
+               connectivity::SPI_DRIVER_(hspi_)->PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
                     average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
-                    cs_pin_.setValue(PIN_BOARD::HIGH);
+                    cs_pin_.setValue(pin_board::HIGH);
                 });
                 STOP_TASK(pin_wait_task_n);
                 pin_ev_.Notify();
@@ -147,8 +145,8 @@ private:
         });
         while (true){
             if(coro_mutex_.TryLock()) {
-                cs_pin_.setValue(PIN_BOARD::LOW);
-                SPI_DRIVER_.PlaceTask(ad7792.SingleConversionCmd(), [&](uint8_t *) {});
+                cs_pin_.setValue(pin_board::LOW);
+                connectivity::SPI_DRIVER_(hspi_)->PlaceTask(ad7792.SingleConversionCmd(), [&](uint8_t *) {});
                 RESUME_TASK(pin_wait_task_n);
                 co_await pin_ev_;
                 coro_mutex_.UnLock();
@@ -162,9 +160,9 @@ private:
     CoroTask<> ContConversion(){
         int pin_wait_task_n = PLACE_ASYNC_TASK_SUSPENDED_QUICKEST([&]{
             if(!miso_rdy_pin_.getState()){
-                SPI_DRIVER_.PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
+                connectivity::SPI_DRIVER_(hspi_)->PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
                     average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
-                    cs_pin_.setValue(PIN_BOARD::HIGH);
+                    cs_pin_.setValue(pin_board::HIGH);
                 });
                 STOP_TASK(pin_wait_task_n);
                 pin_ev_.Notify();
@@ -172,7 +170,7 @@ private:
         });
         while (true){
             if(coro_mutex_.TryLock()){
-                cs_pin_.setValue(PIN_BOARD::LOW);
+                cs_pin_.setValue(pin_board::LOW);
                 RESUME_TASK(pin_wait_task_n);
                 co_await pin_ev_;
                 coro_mutex_.UnLock();

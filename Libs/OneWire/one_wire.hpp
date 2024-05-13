@@ -8,7 +8,7 @@
 #include "stm32g4xx.h"
 #include "stm32g4xx_hal_tim.h"
 
-#include "embedded_hw_utils/utils/task_queue.hpp"
+#include "embedded_hw_utils/utils/queue.hpp"
 #include "embedded_hw_utils/IO/pin.hpp"
 
 #include "Coro/coro_task.hpp"
@@ -133,7 +133,7 @@ class OneWirePort{
                                 SWITCH_CONTEXT
 
 public:
-    explicit OneWirePort(PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> pin, TIM_HandleTypeDef* htim = nullptr)
+    explicit OneWirePort(pin_board::PIN<pin_board::Switchable> pin, TIM_HandleTypeDef* htim = nullptr)
         :pin_(pin)
         ,htim_(htim)
     {}
@@ -243,10 +243,10 @@ private:
     Future_uint verify_coro = Verify();
 
     bool in_process = false;
-    TaskQueue<OneW_Coro::CoroTask, 10> coro_to_run;
+    utils::Queue<OneW_Coro::CoroTask, 10> coro_to_run;
     OneW_Coro::CoroTask running_task {};
 
-    PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> pin_;
+    pin_board::PIN<pin_board::Switchable> pin_;
     Event timer_ev_;
     TIM_HandleTypeDef* htim_;
 
@@ -550,7 +550,7 @@ private:
         while (true){
             uint8_t bit = 0;
             pin_.setAsOutput();
-            pin_.setValue(PIN_BOARD::LOW);
+            pin_.setValue(pin_board::LOW);
             co_await Delay(tRL);
             pin_.setAsInput();
             co_await Delay(tMSR);
@@ -567,14 +567,14 @@ private:
             auto value_to_set = write_bit_coro_.GetArgValue();
             if (value_to_set) {
                 pin_.setAsOutput();
-                pin_.setValue(PIN_BOARD::LOW);
+                pin_.setValue(pin_board::LOW);
                 co_await Delay(tW1l);
                 pin_.setAsInput();
                 co_await Delay(tSlot - tW1l);
                 write_bit_coro_.NotifyAwaiter();
             } else {
                 pin_.setAsOutput();
-                pin_.setValue(PIN_BOARD::LOW);
+                pin_.setValue(pin_board::LOW);
                 co_await Delay(tW0l);
                 pin_.setAsInput();
                 co_await Delay(tSlot - tW0l);
@@ -588,7 +588,7 @@ private:
         while (true){
             uint8_t i;
             pin_.setAsOutput();
-            pin_.setValue(PIN_BOARD::LOW);
+            pin_.setValue(pin_board::LOW);
             co_await Delay(tRSTL);
             pin_.setAsInput();
             co_await Delay(tMSP);

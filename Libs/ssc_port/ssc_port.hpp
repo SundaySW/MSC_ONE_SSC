@@ -3,16 +3,16 @@
 #include "spi_adc.hpp"
 #include "ssc_port_param.hpp"
 #include "embedded_hw_utils/IO/input_signal.hpp"
-#include "async_tim_tasks.hpp"
+#include "async_tim_tasks/async_tim_tasks.hpp"
 
 #define param_default_send_rate     (2000)
 #define param_default_update_rate   (1000)
 
 struct SSCPort{
     SSCPort() = default;
-    SSCPort(PIN_BOARD::PIN<PIN_BOARD::PinWriteable> cs_pin,
-            PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> ow_pin,
-            PIN_BOARD::PIN<PIN_BOARD::PinSwitchable> miso_rdy_pin,
+    SSCPort(pin_board::PIN<pin_board::Writeable> cs_pin,
+            pin_board::PIN<pin_board::Switchable> ow_pin,
+            pin_board::PIN<pin_board::Switchable> miso_rdy_pin,
             SSCPortParam& param)
         : ow_port_(ow_pin)
         , adc_(cs_pin, miso_rdy_pin)

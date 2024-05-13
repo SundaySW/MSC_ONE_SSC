@@ -42,7 +42,7 @@ target_include_directories(${PROJECT_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/Core/Inc
         ${CMAKE_CURRENT_SOURCE_DIR}/App
         ${CMAKE_CURRENT_SOURCE_DIR}/Libs
-        Libs/async_tasks
+        Libs/async_tim_tasks
         )
 
 #Excluding directory - no compilation

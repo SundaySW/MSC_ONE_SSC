@@ -30,7 +30,7 @@
 #include "ssc_port/spi_adc.hpp"
 #include "ssc_port/ssc_port_param.hpp"
 
-#include <async_tim_tasks.hpp>
+#include "async_tim_tasks/async_tim_tasks.hpp"
 
 #define EEPROM_I2C_ADDR 0x50
 #define DS2482_I2C_ADDR 0x18
@@ -285,13 +285,13 @@ private:
             , eeprom(&I2CMaster, EEPROM_I2C_ADDR)
     {}
 
-    SSCPort ssc_port_1{PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(SS0_GPIO_Port, SS0_Pin),
-                      PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID0_GPIO_Port, ID0_Pin),
-                      PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(GPIOB, GPIO_PIN_4),
+    SSCPort ssc_port_1{pin_board::PIN<pin_board::Writeable>(SS0_GPIO_Port, SS0_Pin),
+                      pin_board::PIN<pin_board::Switchable>(ID0_GPIO_Port, ID0_Pin),
+                      pin_board::PIN<pin_board::Switchable>(GPIOB, GPIO_PIN_4),
                       sscPortParam1};
-    SSCPort ssc_port_2{PIN_BOARD::PIN<PIN_BOARD::PinWriteable>(SS1_GPIO_Port, SS1_Pin),
-                      PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(ID1_GPIO_Port, ID1_Pin),
-                       PIN_BOARD::PIN<PIN_BOARD::PinSwitchable>(GPIOB, GPIO_PIN_4),
+    SSCPort ssc_port_2{pin_board::PIN<pin_board::Writeable>(SS1_GPIO_Port, SS1_Pin),
+                      pin_board::PIN<pin_board::Switchable>(ID1_GPIO_Port, ID1_Pin),
+                       pin_board::PIN<pin_board::Switchable>(GPIOB, GPIO_PIN_4),
                       sscPortParam2};
     I2C I2CMaster;
     inline static ADCc3 AdcA1;
