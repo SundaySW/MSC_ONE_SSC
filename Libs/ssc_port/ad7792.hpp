@@ -4,11 +4,14 @@
 
 #include <utility>
 #include <cstdint>
+#include <span>
+
+#include "embedded_hw_utils/utils/tx_data_pair.hpp"
 
 namespace AD7792_adc{
 
 struct AD7792{
-    using HardWareTransmitT = std::function<void(std::pair<uint8_t*, std::size_t>)>;
+    using HardWareTransmitT = std::function<void(utils::TxData)>;
 
     explicit AD7792(HardWareTransmitT transmit_f)
         : transmit_f_(std::move(transmit_f))
@@ -43,7 +46,7 @@ struct AD7792{
         Transmit(4);
     }
 
-    void Init(uint8_t ioCurrent, uint8_t updateRate, uint8_t adcGain, uint8_t adcReferenceSource, uint8_t adcChannel) {
+    void Init(uint8_t ioCurrent, uint8_t updateRate, uint8_t adcGain, uint8_t adcReferenceSource, uint8_t adcChannel){
         Reset();
         IO_Set(ioCurrent);
         Config_Set( ( (1<<4) | (adcGain & 0x07) ), ( (adcReferenceSource<<7) | (1<<4) | (adcChannel & 0x07) ) );
@@ -85,27 +88,27 @@ struct AD7792{
         Transmit(1);
     }
 
-    std::pair<const uint8_t*, std::size_t> RequestDataCmd(){
+    utils::TxData RequestDataCmd(){
         tx_data_[0] = (0 << WEN) | (1 << RW) | (AD7792_DATA_REGISTER << RS0);
-        return {tx_data_, 1};
+        return {tx_data_.data(), 1};
     }
 
-    std::pair<const uint8_t*, std::size_t> SingleConversionCmd(){
+    utils::TxData SingleConversionCmd(){
         tx_data_[0] = 0x08;
         tx_data_[1] = 0x200A >> 8;
         tx_data_[2] = 0x200A & 0x0f;
-        return {tx_data_, 3};
+        return {tx_data_.data(), 3};
     }
 
-    std::pair<const uint8_t*, std::size_t> SingleConversionCmd1(){
+    utils::TxData SingleConversionCmd1(){
         tx_data_[0] = 0x08;
-        return {tx_data_, 1};
+        return {tx_data_.data(), 1};
     }
 
-    std::pair<const uint8_t*, std::size_t> SingleConversionCmd2(){
+    utils::TxData SingleConversionCmd2(){
         tx_data_[0] = 0x200A >> 8;
         tx_data_[1] = 0x200A & 0x0f;
-        return {tx_data_, 2};
+        return {tx_data_.data(), 2};
     }
 
     std::pair<uint8_t, uint8_t> Calibration() {
@@ -190,7 +193,7 @@ struct AD7792{
 
 private:
     HardWareTransmitT transmit_f_;
-    uint8_t tx_data_[8];
+    std::array<uint8_t, 8> tx_data_;
 
 //    template<typename T, std::size_t Size>
 //    void Transmit (T(&v)[Size]){
@@ -198,7 +201,7 @@ private:
 //    }
 
     void Transmit(uint8_t size){
-        transmit_f_({tx_data_, size});
+        transmit_f_(tx_data_);
     }
 
     uint8_t Read(){

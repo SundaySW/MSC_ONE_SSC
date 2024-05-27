@@ -17,7 +17,7 @@ struct SSCPort{
         : ow_port_(ow_pin)
         , adc_(cs_pin, miso_rdy_pin)
         , param_(param)
-        , connection_pin_(ow_pin.getPort(), ow_pin.getPin(), 2)
+        , connection_pin_(ow_pin, 2)
     {}
 
     void Init(SPI_HandleTypeDef* spi, TIM_HandleTypeDef* ow_tim){
@@ -54,13 +54,15 @@ struct SSCPort{
     }
 
     void Start(){
-        PLACE_ASYNC_TASK([&]{
-            if(!ow_port_.IsInProcess())
-                connection_pin_.UpdatePin();
+        PLACE_ASYNC_TASK([](void* context){
+            auto self = static_cast<SSCPort*>(context);
+            if(!self->ow_port_.IsInProcess())
+                self->connection_pin_.UpdatePin();
         }, 100);
         adc_.Start();
-        PLACE_ASYNC_TASK([&]{
-            UpdatePort();
+        PLACE_ASYNC_TASK([](void* context){
+            auto self = static_cast<SSCPort*>(context);
+            self->UpdatePort();
         }, 10);
     }
 

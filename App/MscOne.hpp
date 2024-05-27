@@ -145,9 +145,7 @@ public:
 		Valve1Ctrl.Start();
         ssc_port_1.Start();
         ssc_port_2.Start();
-        PLACE_ASYNC_TASK([&]{
-                HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
-            }, 1);
+        PLACE_ASYNC_TASK([](void*){ HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);}, 1);
 //        PLACE_ASYNC_TASK([&]{
 //            OnTimerINT(1);
 //        }, 1'000);

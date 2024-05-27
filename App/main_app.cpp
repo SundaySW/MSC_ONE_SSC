@@ -44,7 +44,7 @@ extern "C"
     void device_main_loop()
     {
         MscOne::global().Poll();
-        TASK_POOL_POLL();
+        ASYNC_TASKS_POLL();
     }
 
     void OnSysTickTimer()
@@ -94,7 +94,7 @@ extern "C"
     void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         if(htim->Instance == TIM1)
-            TASK_POOL_ON_TIM();
+            ASYNC_TASKS_ON_TIM();
 
         else if(htim->Instance == TIM7)
             MscOne::global().MicroTimHandler();

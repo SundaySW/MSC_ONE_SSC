@@ -24,15 +24,16 @@ struct SpiADC
 
     void SetSPI(SPI_HandleTypeDef* hspi){
         hspi_ = hspi;
-        connectivity::SPI_Driver::global().PlacePort(hspi);
+        SPI_DRIVER_PLACE_PORT(hspi);
     }
 
     void Start()
     {
         InitADCChip();
-        task_n_ = PLACE_ASYNC_TASK_SUSPENDED([&]{
-//            cont_conv_coro.Resume();
-            RequestADCValue();
+        task_n_ = PLACE_ASYNC_SUSPENDED([](void* context){
+            auto self = static_cast<SpiADC*>(context);
+//            self->cont_conv_coro.Resume();
+            self->RequestADCValue();
         }, 5);
     }
 
@@ -43,11 +44,11 @@ struct SpiADC
     void Enable(){
         LoadOWData();
         average_value_.Reset();
-        RESUME_TASK(task_n_);
+        RESUME_ASYNC_TASK(task_n_);
     }
 
     void Disable() const{
-        STOP_TASK(task_n_);
+        STOP_ASYNC_TASK(task_n_);
     }
 
     char* GetTablePtr(){
@@ -65,8 +66,8 @@ struct SpiADC
 
 private:
     AD7792_adc::AD7792 ad7792{
-        [&](std::pair<uint8_t*, std::size_t> ptr_size){
-            connectivity::SPI_DRIVER_(hspi_)->PlaceTask(&cs_pin_, ptr_size);
+        [&](utils::TxData data){
+            SPI_PLACE_TASK(hspi_, &cs_pin_, data);
         }
     };
     static inline CoroMutex coro_mutex_;
@@ -125,29 +126,32 @@ private:
     }
 
     void RequestADCValue(){
-        connectivity::SPI_DRIVER_(hspi_)->PlaceTask(&cs_pin_, ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
-            average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
-        });
+        SPI_PLACE_TASK_CB(hspi_, [](void* c, const uint8_t* data){
+            auto self = static_cast<SpiADC*>(c);
+            self->average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
+        }, &cs_pin_, ad7792.RequestDataCmd(), 2);
     }
 
     Event pin_ev_;
     CoroTask<> single_conv_coro = SingleConversion();
     CoroTask<> SingleConversion(){
-        int pin_wait_task_n = PLACE_ASYNC_TASK_SUSPENDED_QUICKEST([&]{
-            if(!miso_rdy_pin_.getState()){
-               connectivity::SPI_DRIVER_(hspi_)->PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
-                    average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
-                    cs_pin_.setValue(pin_board::HIGH);
-                });
-                STOP_TASK(pin_wait_task_n);
-                pin_ev_.Notify();
+        static int pin_wait_task_n = PLACE_ASYNC_SUSPENDED_QUICKEST([](void* c){
+            auto self = static_cast<SpiADC*>(c);
+            if(!self->miso_rdy_pin_.getState()){
+                SPI_PLACE_TASK_PTR(self->hspi_, c, [](void *c, const uint8_t *data){
+                    auto self = static_cast<SpiADC *>(c);
+                    self->average_value_.PlaceToStorage((data[0] << 8) | data[1]);
+                    self->cs_pin_.setValue(pin_board::HIGH);
+                }, self->ad7792.RequestDataCmd(), 2);
+                STOP_ASYNC_TASK(pin_wait_task_n);
+                self->pin_ev_.Notify();
             }
         });
         while (true){
             if(coro_mutex_.TryLock()) {
                 cs_pin_.setValue(pin_board::LOW);
-                connectivity::SPI_DRIVER_(hspi_)->PlaceTask(ad7792.SingleConversionCmd(), [&](uint8_t *) {});
-                RESUME_TASK(pin_wait_task_n);
+                SPI_PLACE_TASK_CB(hspi_, [](void* c, const uint8_t* data){}, ad7792.SingleConversionCmd());
+                RESUME_ASYNC_TASK(pin_wait_task_n);
                 co_await pin_ev_;
                 coro_mutex_.UnLock();
                 co_yield {};
@@ -158,20 +162,22 @@ private:
 
     CoroTask<> cont_conv_coro = ContConversion();
     CoroTask<> ContConversion(){
-        int pin_wait_task_n = PLACE_ASYNC_TASK_SUSPENDED_QUICKEST([&]{
-            if(!miso_rdy_pin_.getState()){
-                connectivity::SPI_DRIVER_(hspi_)->PlaceTask(ad7792.RequestDataCmd(), 2, [&](const uint8_t* data){
-                    average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
-                    cs_pin_.setValue(pin_board::HIGH);
-                });
-                STOP_TASK(pin_wait_task_n);
-                pin_ev_.Notify();
+        static int pin_wait_task_n = PLACE_ASYNC_SUSPENDED_QUICKEST([](void* c){
+            auto self = static_cast<SpiADC*>(c);
+            if(!self->miso_rdy_pin_.getState()){
+                SPI_PLACE_TASK_PTR(self->hspi_, c, [](void *c, const uint8_t *data){
+                    auto self = static_cast<SpiADC*>(c);
+                    self->average_value_.PlaceToStorage( (data[0]<<8) | data[1] );
+                    self->cs_pin_.setValue(pin_board::HIGH);
+                }, self->ad7792.RequestDataCmd(), 2);
+                STOP_ASYNC_TASK(pin_wait_task_n);
+                self->pin_ev_.Notify();
             }
         });
         while (true){
             if(coro_mutex_.TryLock()){
                 cs_pin_.setValue(pin_board::LOW);
-                RESUME_TASK(pin_wait_task_n);
+                RESUME_ASYNC_TASK(pin_wait_task_n);
                 co_await pin_ev_;
                 coro_mutex_.UnLock();
                 co_yield {};
